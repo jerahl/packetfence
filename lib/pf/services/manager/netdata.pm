@@ -66,6 +66,11 @@ sub generateConfig {
     my $logger = get_logger();
     my %tags;
 
+    # Always define so the %%alerts%% placeholder substitutes to empty when no
+    # alerts are generated. Otherwise the literal '%%alerts%%' is left in the
+    # generated health.d/statsd.conf, which Netdata rejects as an invalid line.
+    $tags{'alerts'} = '';
+
     $tags{'hosts_cluster_members'} = '';
     if ($cluster_enabled) {
         my $int = $management_network->tag('int');
