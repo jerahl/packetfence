@@ -16,7 +16,7 @@ jobs:
       include: api-frontend-docker-wrapper
     log_type: csv
     csv_config:
-      format: '- $remote_addr - - [$time_local] "$request" $status $bytes_sent $http_referer $http_user_agent'
+      format: '- - - - $remote_addr - - [$time_local] "$request" $status $bytes_sent $http_referer $http_user_agent'
 
   - name: httpd.portal
     path: /usr/local/pf/logs/httpd.apache
