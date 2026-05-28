@@ -189,23 +189,6 @@ const setup = (props, context) => {
     return sections.filter(section => ('items' in section && section.items.length) || ('groups' in section && section.groups.length))
   })
 
-  const initNetdata = () => {
-    if (window.NETDATA) {
-      // External JS library already loaded
-      nextTick(() => {
-        window.NETDATA.parseDom()
-      })
-    } else {
-      // Load external JS library
-      let el = document.createElement('SCRIPT')
-      window.netdataNoBootstrap = true
-      window.netdataTheme = 'default'
-      // window.netdataTheme = 'slate' // #272b30
-      el.setAttribute('src', `//${window.location.hostname}:${window.location.port}/netdata/127.0.0.1/dashboard.js`)
-      document.head.appendChild(el)
-    }
-  }
-
   const pingNetdata = () => {
     const [firstChart] = $store.getters[`$_status/uniqueCharts`]
     if (firstChart) {
@@ -219,7 +202,6 @@ const setup = (props, context) => {
         if (service.alive) {
           setTimeout(() => {
             $store.dispatch(`$_status/allCharts`).then(() => {
-              initNetdata()
               pingNetdataTimer.value = setTimeout(pingNetdata, pingNetdataInterval.value)
             })
           }, 20000) // wait until netdata is ready
@@ -278,7 +260,6 @@ const setup = (props, context) => {
 
   onMounted(() => {
     if ($store.state['$_status'].allCharts) {
-      initNetdata()
       getAlarms()
     }
   })
@@ -300,11 +281,7 @@ const setup = (props, context) => {
       ? `${i18n.t(section.name)} - ${i18n.t(group.name)} - ${i18n.t(chart.title)}`
       : `${i18n.t(section.name)} - ${i18n.t(chart.title)}`
   }
-  const onShownChartModal = () => {
-    nextTick(() => {
-      window.NETDATA.updatedDom()
-    })
-  }
+  const onShownChartModal = () => {}
   const onHiddenChartModal = () => {}
 
   const showAfter = ref(60 * 60)
@@ -323,12 +300,6 @@ const setup = (props, context) => {
     { title: i18n.t('2 weeks'),    text: '2W',  value: 60 * 60 * 24 * 14 },
     { title: i18n.t('28 days'),    text: '28D',  value: 60 * 60 * 24 * 28 }
   ]
-
-  watch([tabIndex, () => i18n.locale, showAfter, filter], () => {
-    nextTick(() => {
-      window.NETDATA.updatedDom()
-    })
-  })
 
   watch(tabIndex, () => {
     tabCurrent.value = filteredSections.value[tabIndex.value].name
