@@ -2,6 +2,9 @@
 import { computed } from 'vue'
 import { useUiStore } from '@/stores/ui'
 import { NAC_DATA, deviceIcon } from '@/data/mock'
+import { nodesApi } from '@/api/nodes'
+import { eventsApi } from '@/api/events'
+import { useResource } from '@/composables/useResource'
 import Icon from '@/components/Icon.vue'
 import SparkArea from '@/components/ui/SparkArea.vue'
 import AreaChart from '@/components/ui/AreaChart.vue'
@@ -10,6 +13,10 @@ import StatusChip from '@/components/ui/StatusChip.vue'
 
 const ui = useUiStore()
 
+// KPI sparklines, the 24h chart, the posture donut and the switch-health
+// list stay on the mock for now — those endpoints need either a dedicated
+// /dashboard summary route or the Netdata /api/v1/data series, both of
+// which land in follow-ups.
 const auth   = computed(() => NAC_DATA.trend.slice(-48).map(t => t.active))
 const denied = computed(() => NAC_DATA.trend.slice(-48).map(t => t.denied))
 const regsHist = [12, 18, 15, 22, 19, 28, 31, 26, 34, 29, 38, 42, 36, 45]
@@ -23,8 +30,17 @@ const dist = [
 ]
 const totalEp = dist.reduce((s, d) => s + d.v, 0)
 
-const recentEvents = computed(() => NAC_DATA.events.slice(0, 5))
-const topNodes     = computed(() => NAC_DATA.nodes.slice(0, 6))
+// Two live panels — recent endpoints and open security events. Both fall
+// back to mock when the API is unreachable so the page still renders in
+// dev without a backend.
+const { data: topNodes } = useResource(
+  () => nodesApi.list({ limit: 6 }).then(r => r.items),
+  { fallback: NAC_DATA.nodes.slice(0, 6) },
+)
+const { data: recentEvents } = useResource(
+  () => eventsApi.listOpen({ limit: 5 }),
+  { fallback: NAC_DATA.events.slice(0, 5) },
+)
 
 function severityChipClass(s) {
   return s === 'critical' || s === 'high' ? 'bad' : s === 'medium' ? 'warn' : 'info'

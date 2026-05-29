@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue'
 import { useUiStore } from '@/stores/ui'
 import { NAC_DATA, deviceIcon } from '@/data/mock'
+import { nodesApi } from '@/api/nodes'
+import { useResource } from '@/composables/useResource'
 import Icon from '@/components/Icon.vue'
 import StatusChip from '@/components/ui/StatusChip.vue'
 
@@ -12,16 +14,25 @@ const selected = ref(new Set())
 const filterStatus = ref(null)
 const filterRole = ref(null)
 
+// Try the real PF API; if it fails (dev without backend), `useResource`
+// silently falls back to the mock list so the view stays usable.
+const { data: nodes, loading } = useResource(
+  () => nodesApi.list({ limit: 500 }).then(r => r.items),
+  { fallback: NAC_DATA.nodes },
+)
+
+// Client-side filtering for now — for large datasets this moves to
+// POST /nodes/search with a body, swapping the fetcher above.
 const rows = computed(() => {
-  let out = NAC_DATA.nodes
+  let out = nodes.value || []
   if (q.value) {
     const ql = q.value.toLowerCase()
     out = out.filter(n =>
-      n.mac.toLowerCase().includes(ql) ||
-      n.hostname.toLowerCase().includes(ql) ||
-      n.owner.toLowerCase().includes(ql) ||
-      n.ip.includes(ql) ||
-      n.role.includes(ql),
+      (n.mac || '').toLowerCase().includes(ql) ||
+      (n.hostname || '').toLowerCase().includes(ql) ||
+      (n.owner || '').toLowerCase().includes(ql) ||
+      (n.ip || '').includes(ql) ||
+      (n.role || '').includes(ql),
     )
   }
   if (filterStatus.value) out = out.filter(n => n.status === filterStatus.value)
@@ -52,7 +63,8 @@ const openNodeId = computed(() => ui.inspectorNode?.id)
       <div>
         <div class="page-title">Endpoints</div>
         <div class="page-sub">
-          {{ NAC_DATA.nodes.length.toLocaleString() }} known · {{ rows.length.toLocaleString() }} shown
+          {{ (nodes || []).length.toLocaleString() }} known · {{ rows.length.toLocaleString() }} shown
+          <span v-if="loading" style="color: var(--text-faint); margin-left: 8px">loading…</span>
         </div>
       </div>
       <div class="page-tools">
@@ -168,7 +180,7 @@ const openNodeId = computed(() => ui.inspectorNode?.id)
       </div>
 
       <div class="tbl-foot">
-        <span>Showing <b class="num">{{ rows.length }}</b> of {{ NAC_DATA.nodes.length.toLocaleString() }}</span>
+        <span>Showing <b class="num">{{ rows.length }}</b> of {{ (nodes || []).length.toLocaleString() }}</span>
         <div class="pager">
           <button><Icon name="chevL" :size="12" /></button>
           <button class="cur">1</button>
