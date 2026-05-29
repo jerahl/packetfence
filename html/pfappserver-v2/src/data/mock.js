@@ -120,7 +120,33 @@ for (let i = 0; i < 24 * 12; i++) {
   trend.push({ t: i, active: Math.round(auth), denied: Math.max(0, Math.round(denied)) })
 }
 
-export const NAC_DATA = { nodes, events, switches, trend, users: USERS, roles: ROLES }
+// Admin audit log — same pool of actions as the design's audits generator
+// so the Reports page has realistic-looking rows out of the box.
+const AUDIT_ACTIONS = [
+  { a: 'Authentication accepted', k: 'ok',   det: (n) => `EAP-TLS · ${n.ssid}` },
+  { a: 'Authentication rejected', k: 'bad',  det: (n) => `Bad credentials · ${n.ssid}` },
+  { a: 'Role assigned',           k: 'info', det: (n) => `→ ${n.role} (VLAN ${n.vlan})` },
+  { a: 'VLAN change',             k: 'info', det: (n) => `100 → ${n.vlan}` },
+  { a: 'Endpoint registered',     k: 'ok',   det: () => 'via Self-service portal' },
+  { a: 'Endpoint isolated',       k: 'bad',  det: (_, i) => `Security event #E-${9200 + i}` },
+  { a: 'Admin login',             k: 'info', det: () => 'user=khalil.osman · 2FA' },
+  { a: 'Policy edit',             k: 'warn', det: () => "Connection Profile 'BYOD Onboarding'" },
+]
+const audits = Array.from({ length: 28 }, (_, i) => {
+  const node = nodes[(i * 7) % nodes.length]
+  const act = AUDIT_ACTIONS[(i * 5) % AUDIT_ACTIONS.length]
+  return {
+    id: 'A-' + (44210 - i),
+    time: ['just now', '6m ago', '14m ago', '32m ago', '58m ago', '1h ago', '2h ago', '4h ago', '6h ago', '1d ago'][i % 10],
+    who: USERS[(i * 3) % USERS.length],
+    target: node.mac,
+    action: act.a,
+    kind: act.k,
+    detail: act.det(node, i),
+  }
+})
+
+export const NAC_DATA = { nodes, events, switches, trend, audits, users: USERS, roles: ROLES }
 
 export function deviceIcon(type) {
   switch (type) {
