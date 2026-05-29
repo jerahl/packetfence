@@ -119,7 +119,9 @@ function setCollapsed(v) { tweaks.collapsed = v; tweaks.persist() }
 </template>
 
 <style scoped>
-/* Accent swatches — chunky round buttons with a ring when selected. */
+/* Accent swatches — chunky round buttons with a ring when selected.
+   `.toggle*` styles live in src/assets/styles/components.css so the
+   Policies form can share them. */
 .swatches { display: inline-flex; gap: 10px; }
 .swatch {
   width: 28px; height: 28px;
@@ -131,20 +133,4 @@ function setCollapsed(v) { tweaks.collapsed = v; tweaks.persist() }
 }
 .swatch.on { border-color: var(--text); box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.2), 0 0 0 2px var(--bg); }
 .swatch:focus-visible { box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.2), 0 0 0 3px var(--accent-soft); }
-
-/* Toggle — borrowed from the design's tweaks-panel pattern. */
-.toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
-.toggle-track {
-  width: 30px; height: 18px; background: var(--bg-active); border-radius: 10px;
-  position: relative; transition: background 0.12s;
-  border: 1px solid var(--border);
-  display: inline-block;
-}
-.toggle-thumb {
-  position: absolute; top: 2px; left: 2px;
-  width: 12px; height: 12px; background: var(--text-mid); border-radius: 50%;
-  transition: transform 0.12s, background 0.12s;
-}
-.toggle.on .toggle-track { background: var(--accent); border-color: var(--accent); }
-.toggle.on .toggle-thumb { transform: translateX(12px); background: var(--accent-fg); }
 </style>

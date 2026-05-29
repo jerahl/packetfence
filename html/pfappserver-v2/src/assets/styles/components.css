@@ -289,6 +289,23 @@
 }
 .segmented button.on { background: var(--bg-elev-2); color: var(--text); }
 
+/* Toggle switch — shared between Settings and the Policies form. Ported
+   from the design's tweaks-panel pattern. */
+.toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+.toggle-track {
+  width: 30px; height: 18px; background: var(--bg-active); border-radius: 10px;
+  position: relative; transition: background 0.12s;
+  border: 1px solid var(--border);
+  display: inline-block;
+}
+.toggle-thumb {
+  position: absolute; top: 2px; left: 2px;
+  width: 12px; height: 12px; background: var(--text-mid); border-radius: 50%;
+  transition: transform 0.12s, background 0.12s;
+}
+.toggle.on .toggle-track { background: var(--accent); border-color: var(--accent); }
+.toggle.on .toggle-thumb { transform: translateX(12px); background: var(--accent-fg); }
+
 /* Command palette */
 .cmdk-back {
   position: fixed; inset: 0;

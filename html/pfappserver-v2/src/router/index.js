@@ -8,7 +8,7 @@ const routes = [
   { path: '/identities', name: 'identities', component: () => import('@/views/Identities.vue'),  meta: { crumbs: ['Operate', 'Identities'] } },
   { path: '/network',    name: 'network',    component: () => import('@/views/Network.vue'),     meta: { crumbs: ['Operate', 'Network'] } },
   // Govern
-  { path: '/policies',   name: 'policies',   component: () => import('@/views/Placeholder.vue'), meta: { crumbs: ['Govern', 'Policies'], title: 'Policies' } },
+  { path: '/policies',   name: 'policies',   component: () => import('@/views/Policies.vue'),    meta: { crumbs: ['Govern', 'Policies'] } },
   { path: '/security',   name: 'security',   component: () => import('@/views/Security.vue'),    meta: { crumbs: ['Govern', 'Security'] } },
   { path: '/reports',    name: 'reports',    component: () => import('@/views/Reports.vue'),     meta: { crumbs: ['Govern', 'Reports'] } },
   // System

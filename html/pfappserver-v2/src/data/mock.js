@@ -102,6 +102,19 @@ const events = [
   { id: 'E-9207', node: nodes[40], rule: 'Unauthorized OS detected',      severity: 'low',      action: 'logged',      time: '3h ago',  desc: 'Fingerprint identifies Kali Linux 2024.4' },
 ]
 
+// Connection profiles — ported from the design's data.js. Order is the
+// evaluation order; cp-07 (quarantine) sits at priority 5 so isolated
+// endpoints land on it before anything else.
+const profiles = [
+  { id: 'cp-01', name: 'Corporate Wi-Fi (802.1X)', priority: 10, match: 'ssid == "CORP-WPA2EAP"',          sources: ['AD-Corp', 'RADIUS-Backup'], portal: 'Silent',       role: 'employee',     enabled: true,  devices: 1842 },
+  { id: 'cp-02', name: 'BYOD Onboarding',           priority: 20, match: 'ssid == "BYOD-Onboard"',          sources: ['AD-Corp'],                  portal: 'Self-service', role: 'byod',         enabled: true,  devices: 412 },
+  { id: 'cp-03', name: 'Guest Captive Portal',      priority: 30, match: 'ssid == "GUEST-Captive"',         sources: ['SMS-Twilio', 'Sponsor-Email'], portal: 'Captive',  role: 'guest',        enabled: true,  devices: 187 },
+  { id: 'cp-04', name: 'IoT Pre-Shared',            priority: 40, match: 'ssid == "IOT-PSK"',               sources: ['MAC-Auth'],                 portal: 'MAB',          role: 'iot-trusted',  enabled: true,  devices: 312 },
+  { id: 'cp-05', name: 'VoIP Phones',               priority: 50, match: 'lldp.cap contains "Phone"',       sources: ['MAC-Auth'],                 portal: 'MAB',          role: 'voip',         enabled: true,  devices: 96 },
+  { id: 'cp-06', name: 'Conference Rooms (Wired)',  priority: 60, match: 'switch in [dist-sw-fl3, dist-sw-fl4]', sources: ['AD-Corp'],            portal: 'Captive',      role: 'guest',        enabled: false, devices: 24 },
+  { id: 'cp-07', name: 'Quarantine Isolation',      priority: 5,  match: 'security_event.active',           sources: ['Internal'],                 portal: 'Remediation',  role: 'isolation',    enabled: true,  devices: 4 },
+]
+
 const switches = SWITCHES.map((s, i) => ({
   name: s,
   ip: ip(),
@@ -146,7 +159,7 @@ const audits = Array.from({ length: 28 }, (_, i) => {
   }
 })
 
-export const NAC_DATA = { nodes, events, switches, trend, audits, users: USERS, roles: ROLES }
+export const NAC_DATA = { nodes, events, switches, trend, audits, profiles, users: USERS, roles: ROLES }
 
 export function deviceIcon(type) {
   switch (type) {
