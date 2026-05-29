@@ -112,6 +112,7 @@ const ICONS = {
   ban:     [['circle', { cx: 8, cy: 8, r: 5.5 }], ['path', { d: 'M4 4l8 8' }]],
   unlock:  [['rect', { x: 3, y: 8, width: 10, height: 6, rx: 1 }], ['path', { d: 'M5 8V5a3 3 0 016 0' }]],
   signal:  [['path', { d: 'M2 13h2v-2M5 13h2v-5M8 13h2V8M11 13h2V5' }]],
+  list:    [['path', { d: 'M3 4h10M3 8h10M3 12h10' }]],
 }
 
 const paths = computed(() => ICONS[props.name] || ICONS.dot)

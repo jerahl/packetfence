@@ -4,6 +4,10 @@ import Icon from '@/components/Icon.vue'
 
 // Sidebar IA — three groups, eight items, matches the design's NAV array.
 // Badges are placeholders; will come from the API once wired.
+// `id` is the Vue Router route name. Two items happen to share a label
+// ("Network" lives under both Operate and Status) — the route names are
+// distinct (`network` vs `status-network`) so the router can resolve
+// them; the sidebar UX disambiguates via the parent group label.
 const NAV = [
   { group: 'Operate', items: [
     { id: 'overview',   label: 'Overview',   icon: 'overview' },
@@ -15,6 +19,14 @@ const NAV = [
     { id: 'policies', label: 'Policies', icon: 'policies' },
     { id: 'security', label: 'Security', icon: 'security', badge: '8' },
     { id: 'reports',  label: 'Reports',  icon: 'reports' },
+  ]},
+  { group: 'Status', items: [
+    { id: 'status-monitoring', label: 'Monitoring',  icon: 'signal' },
+    { id: 'status-assets',     label: 'Assets',      icon: 'inspect' },
+    { id: 'status-threats',    label: 'Threats',     icon: 'alert' },
+    { id: 'status-network',    label: 'Network',     icon: 'network' },
+    { id: 'status-services',   label: 'Services',    icon: 'switch' },
+    { id: 'status-queue',      label: 'Local Queue', icon: 'list' },
   ]},
   { group: 'System', items: [
     { id: 'settings', label: 'Settings', icon: 'settings' },
