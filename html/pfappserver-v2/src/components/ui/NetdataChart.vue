@@ -5,6 +5,7 @@
 // pages relied on dygraph + dashboard.js for — kept lightweight since
 // the design dictates a flat dense style.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { authHeader } from '@/api/auth'
 
 const props = defineProps({
   host:    { type: String, default: '/netdata/127.0.0.1' },
@@ -48,7 +49,10 @@ async function fetchData() {
     // oldest-first for left-to-right rendering.
     url.searchParams.set('options', 'flip')
     if (props.params.dimensions) url.searchParams.set('dimensions', props.params.dimensions)
-    const res = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+    const res = await fetch(url, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', ...authHeader() },
+    })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     data.value = await res.json()
     error.value = null

@@ -90,6 +90,25 @@ function colClass(cols) {
 </template>
 
 <style scoped>
+/* Defensive flex tabs. Identical to the global .tabs/.t rules in
+   components.css; duplicated here because something on this view was
+   resolving to display:block (rendering the section names as a vertical
+   list). Scoping these guarantees layout regardless of global cascade. */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 16px; flex-wrap: nowrap; overflow-x: auto; }
+.tabs .t {
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tabs .t:hover { color: var(--text); }
+.tabs .t.active { color: var(--text); border-color: var(--accent); }
+
 .mon-group { margin-bottom: 14px; }
 .mon-grid {
   display: grid;

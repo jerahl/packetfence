@@ -8,6 +8,8 @@
 // Errors throw an ApiError so composables can render a usable message
 // and (optionally) fall back to mock data.
 
+import { authHeader } from './auth'
+
 const BASE = '/api/v1/'
 
 export class ApiError extends Error {
@@ -33,6 +35,7 @@ async function request(method, path, { params, body, signal } = {}) {
       headers: {
         ...(body ? { 'Content-Type': 'application/json' } : {}),
         Accept: 'application/json',
+        ...authHeader(),
       },
       body: body ? JSON.stringify(body) : undefined,
       signal,
