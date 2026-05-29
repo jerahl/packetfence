@@ -48,4 +48,13 @@ export const nodesApi = {
   bulkRegister(macs)   { return api.put('nodes/bulk_register',   { body: { items: macs } }) },
   bulkDeregister(macs) { return api.put('nodes/bulk_deregister', { body: { items: macs } }) },
   bulkReevaluate(macs) { return api.put('nodes/bulk_reevaluate_access', { body: { items: macs } }) },
+  // Apply an isolation/quarantine security event. PF's endpoint takes
+  // `items: [...mac]` plus the `security_event_id` to apply (defaults
+  // to PF's built-in MANAGER isolation event when omitted; callers can
+  // pass a specific id).
+  bulkApplySecurityEvent(macs, securityEventId) {
+    return api.put('nodes/bulk_apply_security_event', {
+      body: { items: macs, security_event_id: securityEventId },
+    })
+  },
 }

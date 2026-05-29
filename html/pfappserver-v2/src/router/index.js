@@ -9,7 +9,7 @@ const routes = [
   { path: '/network',    name: 'network',    component: () => import('@/views/Placeholder.vue'), meta: { crumbs: ['Operate', 'Network'], title: 'Network' } },
   // Govern
   { path: '/policies',   name: 'policies',   component: () => import('@/views/Placeholder.vue'), meta: { crumbs: ['Govern', 'Policies'], title: 'Policies' } },
-  { path: '/security',   name: 'security',   component: () => import('@/views/Placeholder.vue'), meta: { crumbs: ['Govern', 'Security'], title: 'Security events' } },
+  { path: '/security',   name: 'security',   component: () => import('@/views/Security.vue'),    meta: { crumbs: ['Govern', 'Security'] } },
   { path: '/reports',    name: 'reports',    component: () => import('@/views/Placeholder.vue'), meta: { crumbs: ['Govern', 'Reports'], title: 'Reports' } },
   // System
   { path: '/settings',   name: 'settings',   component: () => import('@/views/Settings.vue'),    meta: { crumbs: ['System', 'Settings'] } },

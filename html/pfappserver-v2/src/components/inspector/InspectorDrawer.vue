@@ -1,18 +1,42 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { useUiStore } from '@/stores/ui'
 import { NAC_DATA, deviceIcon } from '@/data/mock'
+import { eventsApi } from '@/api/events'
+import { nodesApi } from '@/api/nodes'
 import Icon from '@/components/Icon.vue'
 import StatusChip from '@/components/ui/StatusChip.vue'
 
 const ui = useUiStore()
 const tab = ref('overview')
 
-// Reset to Overview every time a new node is opened.
-watch(() => ui.inspectorNode?.id, () => { tab.value = 'overview' })
+// Per-node security events: fetched lazily the first time the Events tab
+// opens for a given node, with a silent fall back to the mock list so dev
+// keeps working without a backend. Reset when the open node changes.
+const events = shallowRef(null)
+const eventsLoading = ref(false)
+
+watch(() => ui.inspectorNode?.id, () => {
+  tab.value = 'overview'
+  events.value = null
+  eventsLoading.value = false
+})
 
 const node = computed(() => ui.inspectorNode)
-const events = computed(() => node.value ? NAC_DATA.events.filter(e => e.node.id === node.value.id) : [])
+
+watch([tab, () => node.value?.mac], async ([t, mac]) => {
+  if (t !== 'events' || !mac || events.value) return
+  eventsLoading.value = true
+  try {
+    events.value = await eventsApi.listForNode(mac)
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn('[InspectorDrawer] events fetch failed, using mock:', e?.message || e)
+    events.value = NAC_DATA.events.filter(ev => ev.node.id === node.value.id)
+  } finally {
+    eventsLoading.value = false
+  }
+})
 
 const timeline = computed(() => {
   const n = node.value
@@ -44,6 +68,30 @@ const rawJson = computed(() => {
 function severityChipClass(s) {
   return s === 'critical' || s === 'high' ? 'bad' : s === 'medium' ? 'warn' : 'info'
 }
+
+// Inspector foot actions. Each hits the same bulk endpoint the existing
+// admin uses, scoped to this one MAC. A toast/notification component will
+// replace the console logging in a follow-up.
+const actionPending = ref(null)
+async function runAction(label, fn) {
+  if (!node.value || actionPending.value) return
+  actionPending.value = label
+  try {
+    await fn([node.value.mac])
+    // eslint-disable-next-line no-console
+    console.info(`[Inspector] ${label} ok for ${node.value.mac}`)
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error(`[Inspector] ${label} failed:`, e?.message || e)
+  } finally {
+    actionPending.value = null
+  }
+}
+const onReauth  = () => runAction('Re-auth', nodesApi.bulkReevaluate)
+const onIsolate = () => runAction('Isolate', macs => nodesApi.bulkApplySecurityEvent(macs))
+// Change role needs a role-picker modal — wired in a follow-up alongside
+// the Policies page port. Keep the affordance clickable for now.
+const onChangeRole = () => console.info('[Inspector] Change role: picker UI pending')
 </script>
 
 <template>
@@ -145,9 +193,14 @@ function severityChipClass(s) {
 
         <template v-else-if="tab === 'events'">
           <div class="insp-section">
-            <div class="insp-section-h">Security events</div>
-            <div v-if="events.length === 0" class="empty">No open security events on this endpoint.</div>
-            <div v-else v-for="e in events" :key="e.id" style="padding:10px 0; border-bottom:1px solid var(--border)">
+            <div class="insp-section-h">
+              Security events
+              <span v-if="eventsLoading" style="font-weight:400; color:var(--text-faint); margin-left:6px">loading…</span>
+            </div>
+            <div v-if="!eventsLoading && (events || []).length === 0" class="empty">
+              No open security events on this endpoint.
+            </div>
+            <div v-else v-for="e in (events || [])" :key="e.id" style="padding:10px 0; border-bottom:1px solid var(--border)">
               <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px">
                 <span :class="['chip', severityChipClass(e.severity)]">{{ e.severity }}</span>
                 <span style="font-weight:500">{{ e.rule }}</span>
@@ -167,9 +220,15 @@ function severityChipClass(s) {
       </div>
 
       <div class="insp-foot">
-        <button class="btn"><Icon name="bolt" :size="12" /> Re-auth</button>
-        <button class="btn"><Icon name="user" :size="12" /> Change role</button>
-        <button class="btn danger"><Icon name="ban" :size="12" /> Isolate</button>
+        <button class="btn" :disabled="actionPending === 'Re-auth'" @click="onReauth">
+          <Icon name="bolt" :size="12" /> {{ actionPending === 'Re-auth' ? 'Re-authenticating…' : 'Re-auth' }}
+        </button>
+        <button class="btn" @click="onChangeRole">
+          <Icon name="user" :size="12" /> Change role
+        </button>
+        <button class="btn danger" :disabled="actionPending === 'Isolate'" @click="onIsolate">
+          <Icon name="ban" :size="12" /> {{ actionPending === 'Isolate' ? 'Isolating…' : 'Isolate' }}
+        </button>
         <button class="btn ghost" style="margin-left:auto">Open full page <Icon name="arrowR" :size="12" /></button>
       </div>
     </template>

@@ -140,7 +140,9 @@ function severityChipClass(s) {
           <div class="card-title">Open security events</div>
           <div class="card-sub">Tap to inspect</div>
           <div class="card-tools">
-            <button class="btn sm ghost">View all <Icon name="chevR" :size="12" /></button>
+            <router-link :to="{ name: 'security' }" class="btn sm ghost" style="text-decoration:none">
+              View all <Icon name="chevR" :size="12" />
+            </router-link>
           </div>
         </div>
         <div class="activity">
