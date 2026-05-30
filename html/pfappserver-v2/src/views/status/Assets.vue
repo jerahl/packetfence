@@ -8,7 +8,7 @@
 // data — device-class breakdown (GET /api/v1/nodes/per_device_class),
 // plus vendor/OS/status rollups derived client-side from the nodes
 // list — in a dense ops-console layout consistent with the rest of v2.
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useUiStore } from '@/stores/ui'
 import { NAC_DATA, deviceIcon } from '@/data/mock'
 import { nodesApi } from '@/api/nodes'
@@ -19,6 +19,21 @@ import StatusChip from '@/components/ui/StatusChip.vue'
 import NodeGraph from '@/components/ui/NodeGraph.vue'
 
 const ui = useUiStore()
+
+// --- Filters --------------------------------------------------------
+// Mirror of the v1 Assets page's filters: a free-text search across
+// the obvious node fields (hostname/mac/owner/ip/vendor), a device-
+// class chip multi-select (the prominent grid in v1's footer), and
+// a status chip multi-select for completeness.
+//
+// Filters narrow the entire page in sync: KPIs, donut, vendor/OS
+// rollups, status bars, the recent table, AND the topology graph
+// (endpoints that don't match are dropped along with their edges;
+// PF + switches stay so the topology reads as "what's left").
+const STATUSES = ['registered', 'pending', 'unregistered', 'isolated']
+const q = ref('')
+const selectedClasses = ref(new Set())   // device class names
+const selectedStatuses = ref(new Set())  // status values
 
 // Donut palette (oklch slots so it tracks the active theme/accent).
 const PALETTE = [
@@ -65,12 +80,67 @@ const { data: graph, loading: graphLoading } = useResource(
 
 const loading = computed(() => perClassLoading.value || nodesLoading.value || graphLoading.value)
 
+const hasFilters = computed(() =>
+  q.value.trim() !== '' || selectedClasses.value.size > 0 || selectedStatuses.value.size > 0,
+)
+
+// Filtered nodes — driver for every rollup, the donut, and the
+// recent table. Always present; equals `nodes` when no filter active.
+const filteredNodes = computed(() => {
+  const list = nodes.value || []
+  const ql = q.value.trim().toLowerCase()
+  const classes = selectedClasses.value
+  const statuses = selectedStatuses.value
+  if (!ql && classes.size === 0 && statuses.size === 0) return list
+  return list.filter(n => {
+    if (ql) {
+      const hay = `${n.hostname || ''} ${n.mac || ''} ${n.owner || ''} ${n.ip || ''} ${n.vendor || ''} ${n.os || ''}`.toLowerCase()
+      if (!hay.includes(ql)) return false
+    }
+    if (classes.size && !classes.has(n.type || '—')) return false
+    if (statuses.size && !statuses.has(n.status)) return false
+    return true
+  })
+})
+
+// All device classes we know about, ranked. Pulls from the API's
+// per-device-class counts when no filter is active (those reflect
+// the full DB, beyond the 1000-node `list` cap); falls back to a
+// derivation from the loaded nodes otherwise. Used both for the
+// donut and for the chip set rendered in the filter bar.
+function deriveClassRows(list) {
+  const acc = new Map()
+  for (const n of list) {
+    const k = n.type || 'Unknown'
+    acc.set(k, (acc.get(k) || 0) + 1)
+  }
+  return [...acc.entries()]
+    .map(([device_class, count]) => ({ device_class, count }))
+    .sort((a, b) => b.count - a.count)
+}
 const classRows = computed(() => {
-  const rows = (perClass.value || []).slice().sort((a, b) => b.count - a.count)
-  return rows.map((r, i) => ({ ...r, color: PALETTE[i % PALETTE.length] }))
+  const source = hasFilters.value
+    ? deriveClassRows(filteredNodes.value)
+    : ((perClass.value && perClass.value.length)
+        ? perClass.value.slice().sort((a, b) => b.count - a.count)
+        : deriveClassRows(nodes.value || []))
+  return source.map((r, i) => ({ ...r, color: PALETTE[i % PALETTE.length] }))
+})
+
+// Full unfiltered class list for the filter chip set — independent
+// of the active filter so the chips stay stable as users toggle.
+const allClasses = computed(() => {
+  if (perClass.value && perClass.value.length) {
+    return perClass.value.slice().sort((a, b) => b.count - a.count).map(r => r.device_class)
+  }
+  return deriveClassRows(nodes.value || []).map(r => r.device_class)
 })
 
 const totalAssets = computed(() => classRows.value.reduce((s, r) => s + r.count, 0))
+const totalUnfiltered = computed(() => {
+  if (perClass.value && perClass.value.length) return perClass.value.reduce((s, r) => s + r.count, 0)
+  return (nodes.value || []).length
+})
 const topClass = computed(() => classRows.value[0])
 const classCount = computed(() => classRows.value.length)
 
@@ -90,31 +160,79 @@ function topBy(list, key, n = 10) {
     .slice(0, n)
 }
 
-const topVendors = computed(() => topBy(nodes.value || [], 'vendor', 8))
-const topOses    = computed(() => topBy(nodes.value || [], 'os',     8))
+const topVendors = computed(() => topBy(filteredNodes.value, 'vendor', 8))
+const topOses    = computed(() => topBy(filteredNodes.value, 'os',     8))
 
 const statusBreakdown = computed(() => {
-  const order = ['registered', 'pending', 'unregistered', 'isolated']
+  const order = STATUSES
   const acc = new Map(order.map(k => [k, 0]))
-  for (const n of nodes.value || []) {
+  for (const n of filteredNodes.value) {
     acc.set(n.status, (acc.get(n.status) || 0) + 1)
   }
   return order.map(k => ({ status: k, count: acc.get(k) || 0 }))
 })
 
 const activePct = computed(() => {
-  const total = (nodes.value || []).length || 1
+  const total = filteredNodes.value.length || 1
   const reg = statusBreakdown.value.find(s => s.status === 'registered')?.count || 0
   return Math.round(reg / total * 100)
 })
 
-// Recent additions for the inspector hook-up — last 8 by lastSeen text
-// is a rough heuristic since lastSeen is a relative string in mock data;
-// for real data lastSeen is sortable.
-const recent = computed(() => (nodes.value || []).slice(0, 8))
+const recent = computed(() => filteredNodes.value.slice(0, 8))
 
 function pct(count) {
   return totalAssets.value ? Math.round(count / totalAssets.value * 100) : 0
+}
+
+// Filtered graph — keep PF + switches; filter endpoint nodes by which
+// MACs are present in filteredNodes; drop links whose target endpoint
+// got filtered. When no filter is active, return the source graph
+// untouched (no allocations).
+const filteredGraph = computed(() => {
+  if (!graph.value) return { nodes: [], links: [] }
+  if (!hasFilters.value) return graph.value
+  const keepMacs = new Set(filteredNodes.value.map(n => n.mac))
+  const keptIds = new Set()
+  const nextNodes = []
+  for (const gn of graph.value.nodes) {
+    if (gn.type !== 'node') { nextNodes.push(gn); keptIds.add(gn.id); continue }
+    if (gn.mac && keepMacs.has(gn.mac)) { nextNodes.push(gn); keptIds.add(gn.id) }
+  }
+  const nextLinks = graph.value.links.filter(l => keptIds.has(l.source) && keptIds.has(l.target))
+  return { nodes: nextNodes, links: nextLinks }
+})
+
+// --- Filter actions -------------------------------------------------
+function toggleClass(name) {
+  const next = new Set(selectedClasses.value)
+  next.has(name) ? next.delete(name) : next.add(name)
+  selectedClasses.value = next
+}
+function toggleStatus(s) {
+  const next = new Set(selectedStatuses.value)
+  next.has(s) ? next.delete(s) : next.add(s)
+  selectedStatuses.value = next
+}
+function clearFilters() {
+  q.value = ''
+  selectedClasses.value = new Set()
+  selectedStatuses.value = new Set()
+}
+function selectAllClasses()  { selectedClasses.value = new Set(allClasses.value) }
+function selectNoClasses()   { selectedClasses.value = new Set() }
+function invertClasses() {
+  const next = new Set()
+  for (const c of allClasses.value) if (!selectedClasses.value.has(c)) next.add(c)
+  selectedClasses.value = next
+}
+// Status → chip variant. Selected status chips colour-code in the
+// filter bar so users see at a glance what they've narrowed by.
+function statusChipClass(s) {
+  if (s === 'registered')   return 'ok'
+  if (s === 'pending')      return 'info'
+  if (s === 'unregistered') return 'warn'
+  if (s === 'isolated')     return 'bad'
+  return ''
 }
 </script>
 
@@ -124,7 +242,13 @@ function pct(count) {
       <div>
         <div class="page-title">Assets</div>
         <div class="page-sub">
-          Inventory rollup by device class, vendor and OS
+          <template v-if="hasFilters">
+            <b class="num">{{ filteredNodes.length.toLocaleString() }}</b>
+            of {{ totalUnfiltered.toLocaleString() }} assets shown
+          </template>
+          <template v-else>
+            Inventory rollup by device class, vendor and OS
+          </template>
           <span v-if="loading" style="color: var(--text-faint); margin-left: 8px">loading…</span>
         </div>
       </div>
@@ -134,21 +258,67 @@ function pct(count) {
       </div>
     </div>
 
+    <!-- Filter bar -->
+    <div class="card asset-filters">
+      <div class="asset-filter-row">
+        <div class="tbl-search" style="flex:1; max-width:420px">
+          <Icon name="search" />
+          <input v-model="q" placeholder="Search by hostname, MAC, owner, IP, vendor, OS…" />
+          <button v-if="q" class="btn sm ghost" @click="q = ''" title="Clear search"><Icon name="x" :size="12" /></button>
+        </div>
+
+        <div class="asset-chips">
+          <span class="asset-chip-label">Status</span>
+          <button
+            v-for="s in STATUSES" :key="s"
+            type="button"
+            :class="['chip', selectedStatuses.has(s) ? statusChipClass(s) : '']"
+            :style="selectedStatuses.has(s) ? '' : 'cursor:pointer'"
+            @click="toggleStatus(s)"
+          >{{ s }}</button>
+        </div>
+
+        <button
+          v-if="hasFilters" class="btn sm ghost"
+          style="margin-left:auto" @click="clearFilters"
+        ><Icon name="x" :size="12" /> Clear filters</button>
+      </div>
+
+      <div class="asset-filter-row asset-classes-row">
+        <span class="asset-chip-label">Device class</span>
+        <button
+          v-for="c in allClasses" :key="c"
+          type="button"
+          :class="['chip', selectedClasses.has(c) ? 'accent' : '']"
+          style="cursor:pointer"
+          @click="toggleClass(c)"
+        >{{ c }}</button>
+        <div class="asset-chip-tools">
+          <button class="btn sm ghost" @click="selectAllClasses">All</button>
+          <button class="btn sm ghost" @click="selectNoClasses">None</button>
+          <button class="btn sm ghost" @click="invertClasses">Invert</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Network topology graph -->
     <div class="card" style="margin-bottom: 14px">
       <div class="card-head">
         <div>
           <div class="card-title">Network topology</div>
           <div class="card-sub">
-            {{ (graph?.nodes || []).length.toLocaleString() }} nodes ·
-            {{ (graph?.links || []).length.toLocaleString() }} links ·
-            from <span class="mono">POST /api/v1/nodes/network_graph</span>
+            {{ (filteredGraph?.nodes || []).length.toLocaleString() }} nodes ·
+            {{ (filteredGraph?.links || []).length.toLocaleString() }} links
+            <template v-if="hasFilters">
+              · <span style="color:var(--accent)">filtered</span>
+            </template>
+            · from <span class="mono">POST /api/v1/nodes/network_graph</span>
           </div>
         </div>
       </div>
       <NodeGraph
-        :nodes="graph?.nodes || []"
-        :links="graph?.links || []"
+        :nodes="filteredGraph?.nodes || []"
+        :links="filteredGraph?.links || []"
         :height="520"
       />
     </div>
@@ -185,7 +355,11 @@ function pct(count) {
         <div class="card-head">
           <div>
             <div class="card-title">Device classes</div>
-            <div class="card-sub">{{ classRows.length }} class{{ classRows.length === 1 ? '' : 'es' }} · live from /api/v1/nodes/per_device_class</div>
+            <div class="card-sub">
+              {{ classRows.length }} class{{ classRows.length === 1 ? '' : 'es' }}
+              <template v-if="hasFilters"> · filtered from {{ filteredNodes.length.toLocaleString() }} asset{{ filteredNodes.length === 1 ? '' : 's' }}</template>
+              <template v-else> · live from /api/v1/nodes/per_device_class</template>
+            </div>
           </div>
         </div>
         <div class="card-body" style="display:flex; gap:18px; align-items:center">
@@ -213,7 +387,7 @@ function pct(count) {
             <StatusChip :status="row.status" />
             <div class="asset-bar-track">
               <span :style="{
-                width: ((nodes || []).length ? row.count / (nodes || []).length * 100 : 0) + '%',
+                width: (filteredNodes.length ? row.count / filteredNodes.length * 100 : 0) + '%',
                 background: row.status === 'registered' ? 'var(--success)' :
                             row.status === 'pending' ? 'var(--info)' :
                             row.status === 'unregistered' ? 'var(--text-dim)' : 'var(--danger)',
@@ -305,6 +479,9 @@ function pct(count) {
               <td class="mono" style="color:var(--text-dim)">{{ n.lastSeen }}</td>
               <td><StatusChip :status="n.status" /></td>
             </tr>
+            <tr v-if="!loading && recent.length === 0">
+              <td colspan="7" class="empty" style="text-align:center">No endpoints match the current filters.</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -345,4 +522,35 @@ function pct(count) {
   font-size: 12px;
 }
 .asset-list-count { text-align: right; color: var(--text-dim); font-size: 11px; }
+
+/* Filter bar */
+.asset-filters { margin-bottom: 14px; padding: 10px 12px; }
+.asset-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.asset-filter-row + .asset-filter-row { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.asset-chip-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  font-weight: 600;
+  margin-right: 2px;
+}
+.asset-chips { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.asset-classes-row { gap: 6px; }
+/* Make chips in the filter bar feel clickable + carry a hover hint
+   so users discover they're toggles. Selected chips already
+   colour-shift via the global .chip.ok/.warn/.bad/.accent. */
+.asset-filter-row .chip { cursor: pointer; transition: background 0.1s, color 0.1s, border-color 0.1s; }
+.asset-filter-row .chip:hover { background: var(--bg-hover); color: var(--text); }
+.asset-filter-row .chip.ok:hover,
+.asset-filter-row .chip.warn:hover,
+.asset-filter-row .chip.bad:hover,
+.asset-filter-row .chip.info:hover,
+.asset-filter-row .chip.accent:hover { filter: brightness(1.08); background: var(--accent-soft); }
+.asset-chip-tools { margin-left: auto; display: inline-flex; gap: 4px; }
 </style>
