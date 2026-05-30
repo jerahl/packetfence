@@ -13,7 +13,7 @@ const routes = [
   { path: '/reports',    name: 'reports',    component: () => import('@/views/Reports.vue'),     meta: { crumbs: ['Govern', 'Reports'] } },
   // Status — Netdata-backed live charts
   { path: '/status/monitoring', name: 'status-monitoring', component: () => import('@/views/status/Monitoring.vue'), meta: { crumbs: ['Status', 'Monitoring'] } },
-  { path: '/status/assets',     name: 'status-assets',     component: () => import('@/views/status/StatusStub.vue'), meta: { crumbs: ['Status', 'Assets'],   title: 'Assets',      source: 'endpoint inventory (api/v1/nodes) cross-cut by device class', note: 'Inventory rollups from PF endpoints' } },
+  { path: '/status/assets',     name: 'status-assets',     component: () => import('@/views/status/Assets.vue'),     meta: { crumbs: ['Status', 'Assets'] } },
   { path: '/status/threats',    name: 'status-threats',    component: () => import('@/views/status/StatusStub.vue'), meta: { crumbs: ['Status', 'Threats'],  title: 'Threats',     source: 'security events + RADIUS auth failure metrics',          note: 'Live security-event volume and rule trends' } },
   { path: '/status/network',    name: 'status-network',    component: () => import('@/views/status/StatusStub.vue'), meta: { crumbs: ['Status', 'Network'],  title: 'Network',     source: 'Netdata system.net / ipv4 / ipv6 charts',                note: 'Live network-stack throughput and errors' } },
   { path: '/status/services',   name: 'status-services',   component: () => import('@/views/status/StatusStub.vue'), meta: { crumbs: ['Status', 'Services'], title: 'Services',    source: 'Netdata cgroup_<service>.* charts (dynamic discovery)',  note: 'Per-container CPU, memory and I/O' } },

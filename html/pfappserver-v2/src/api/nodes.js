@@ -57,4 +57,11 @@ export const nodesApi = {
       body: { items: macs, security_event_id: securityEventId },
     })
   },
+
+  // GET /api/v1/nodes/per_device_class — { items: [{ device_class, count }, …] }
+  // Powers the Assets inventory page.
+  async perDeviceClass() {
+    const data = await api.get('nodes/per_device_class')
+    return data?.items || []
+  },
 }
