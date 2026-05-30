@@ -16,6 +16,7 @@ import { useResource } from '@/composables/useResource'
 import Icon from '@/components/Icon.vue'
 import Donut from '@/components/ui/Donut.vue'
 import StatusChip from '@/components/ui/StatusChip.vue'
+import NodeGraph from '@/components/ui/NodeGraph.vue'
 
 const ui = useUiStore()
 
@@ -55,7 +56,14 @@ const { data: nodes, loading: nodesLoading } = useResource(
   { fallback: NAC_DATA.nodes },
 )
 
-const loading = computed(() => perClassLoading.value || nodesLoading.value)
+// Live network topology — falls back to the derived mock graph
+// (PF → switches → endpoints) when the API is unreachable.
+const { data: graph, loading: graphLoading } = useResource(
+  () => nodesApi.networkGraph(),
+  { fallback: NAC_DATA.networkGraph },
+)
+
+const loading = computed(() => perClassLoading.value || nodesLoading.value || graphLoading.value)
 
 const classRows = computed(() => {
   const rows = (perClass.value || []).slice().sort((a, b) => b.count - a.count)
@@ -124,6 +132,25 @@ function pct(count) {
         <button class="btn"><Icon name="download" :size="13" /> Export</button>
         <button class="btn"><Icon name="refresh" :size="13" /> Refresh</button>
       </div>
+    </div>
+
+    <!-- Network topology graph -->
+    <div class="card" style="margin-bottom: 14px">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Network topology</div>
+          <div class="card-sub">
+            {{ (graph?.nodes || []).length.toLocaleString() }} nodes ·
+            {{ (graph?.links || []).length.toLocaleString() }} links ·
+            from <span class="mono">POST /api/v1/nodes/network_graph</span>
+          </div>
+        </div>
+      </div>
+      <NodeGraph
+        :nodes="graph?.nodes || []"
+        :links="graph?.links || []"
+        :height="520"
+      />
     </div>
 
     <!-- KPIs -->
@@ -283,13 +310,6 @@ function pct(count) {
       </div>
     </div>
 
-    <!-- Footer note about the deferred graph view -->
-    <div class="asset-note">
-      The v1 admin's <span class="mono">/admin/status/assets</span> renders a force-directed network graph
-      (data: <span class="mono">POST /api/v1/nodes/network_graph</span>). That visualisation is a
-      separate piece of work — the rollups above use the same underlying nodes data so the
-      inventory picture is intact without it.
-    </div>
   </div>
 </template>
 
@@ -325,15 +345,4 @@ function pct(count) {
   font-size: 12px;
 }
 .asset-list-count { text-align: right; color: var(--text-dim); font-size: 11px; }
-
-.asset-note {
-  margin-top: 14px;
-  padding: 12px 14px;
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text-dim);
-  font-size: 12px;
-  line-height: 1.6;
-}
 </style>

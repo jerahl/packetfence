@@ -159,7 +159,40 @@ const audits = Array.from({ length: 28 }, (_, i) => {
   }
 })
 
-export const NAC_DATA = { nodes, events, switches, trend, audits, profiles, users: USERS, roles: ROLES }
+// Mock network_graph — same shape as POST /api/v1/nodes/network_graph
+// returns. PF at the centre, switches around it, endpoints under their
+// assigned switch. Endpoint records are cross-referenced so clicking
+// them in the graph opens the inspector with the full record.
+function buildMockGraph() {
+  const switchNames = new Set(switches.map(s => s.name))
+  const fallback = switches[0].name
+  const graphNodes = [
+    { id: 'pf', type: 'packetfence', label: 'PacketFence' },
+    ...switches.map(s => ({ id: `sw:${s.name}`, type: 'switch', label: s.name, mac: s.ip })),
+    ...nodes.map(n => ({
+      id: `n:${n.id}`,
+      type: 'node',
+      label: n.hostname,
+      mac: n.mac,
+      status: n.status,
+      _endpoint: n,
+    })),
+  ]
+  const graphLinks = [
+    // PF → each switch
+    ...switches.map(s => ({ source: 'pf', target: `sw:${s.name}` })),
+    // Each endpoint → its assigned switch (or the first one if unknown).
+    ...nodes.map(n => ({
+      source: `sw:${switchNames.has(n.switch) ? n.switch : fallback}`,
+      target: `n:${n.id}`,
+    })),
+  ]
+  return { nodes: graphNodes, links: graphLinks }
+}
+
+const networkGraph = buildMockGraph()
+
+export const NAC_DATA = { nodes, events, switches, trend, audits, profiles, networkGraph, users: USERS, roles: ROLES }
 
 export function deviceIcon(type) {
   switch (type) {

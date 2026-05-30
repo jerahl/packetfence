@@ -64,4 +64,16 @@ export const nodesApi = {
     const data = await api.get('nodes/per_device_class')
     return data?.items || []
   },
+
+  // POST /api/v1/nodes/network_graph — returns
+  //   { network_graph: { nodes: [...], links: [...] } }
+  // Nodes carry `type`: 'packetfence' | 'switch-group' | 'switch' |
+  // 'unknown' | 'node'. Links use string `source`/`target` ids.
+  // The body lets the backend scope which nodes to include; we send
+  // an empty filter by default (everything).
+  async networkGraph(body = {}) {
+    const data = await api.post('nodes/network_graph', { body })
+    const g = data?.network_graph || data || {}
+    return { nodes: g.nodes || [], links: g.links || [] }
+  },
 }
