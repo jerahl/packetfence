@@ -23,7 +23,12 @@ dataset that's nice to look at in the UI.
 The default `seed-data.json` contains:
 
 - **7 roles** — `Corp-Employee`, `Contractor`, `BYOD`, `VoIP`, `IoT`,
-  `Printers`, `Guest`. Created as `node_categories` if they don't exist.
+  `Printers`, `Guest`. Created via `/config/roles` (the stable, file-backed
+  roles endpoint, visible under Configuration → Roles). Nodes are assigned to
+  these roles only if the box also exposes `/node_categories` (needed to
+  resolve a role name to its numeric `category_id`); older PF builds lack that
+  route, so there the nodes load with the default role and the roles are still
+  created in config.
 - **12 users** — fabricated identities (`example.com` emails, `555` phone
   numbers), spread across departments.
 - **30 nodes** — owned by those users, with varied device classes (Macintosh,
@@ -92,6 +97,7 @@ cd /usr/local/pf/addons/dev-seed
 | `--update`       | off              | PATCH existing users/nodes to match the dataset.  |
 | `--skip-events`  | off              | Don't apply security events.                      |
 | `--dry-run`      | off              | Print the plan; make no changes.                  |
+| `--probe`        | off              | Log in, report which API endpoints this box exposes, and exit. |
 | `--timeout`      | `15`             | Per-request timeout (seconds).                    |
 
 ## Output
@@ -143,11 +149,29 @@ All under `https://<server>:<api-port>/api/v1/`:
 | Step            | Call                                                  |
 |-----------------|-------------------------------------------------------|
 | Login           | `POST /login` → `{ token }` (JWT)                     |
+| Create role     | `POST /config/roles`  `{ id, notes }`                 |
+| List roles      | `GET  /config/roles`                                  |
+| Resolve role id | `GET  /node_categories` (newer PF only; name → category_id) |
 | Discover events | `GET  /config/security_events`                        |
-| List roles      | `GET  /node_categories`                               |
-| Create role     | `POST /node_categories`  `{ name, notes }`            |
 | Create user     | `POST /users`  `{ pid, firstname, ... }`              |
 | Update user     | `PATCH /user/<pid>`                                   |
 | Create node     | `POST /nodes`  `{ mac, pid, category_id, status, ... }` |
 | Update node     | `PATCH /node/<mac>`                                   |
 | Apply sec event | `POST /node/<mac>/apply_security_event` `{ security_event_id }` |
+
+## Troubleshooting
+
+API routes vary by PF version. If roles or events fail, run `--probe` to see
+exactly what your box exposes:
+
+```bash
+./pf-seed.py --server 127.0.0.1 --admin-user admin --admin-pass <pass> --insecure --probe
+```
+
+- **`Unknown path /api/v1/node_categories`** — your PF predates that route.
+  Roles are still created via `/config/roles`; node role assignment is skipped
+  (nodes keep the default role).
+- **`unknown error adding security event <id>`** — the id isn't in the box's
+  `class` table. Enable the event under Configuration → Security Events, then
+  `/usr/local/pf/bin/pfcmd configreload hard`. The seeder also auto-remaps to
+  an id it finds via `/config/security_events` when possible.

@@ -133,50 +133,65 @@ def msg_of(body):
 
 # ---------- Seeding steps ----------------------------------------------
 
+def category_id_map(api):
+    """name -> category_id, read from /node_categories. That route only
+    exists on newer PF; returns {} (with no error) on versions without it,
+    in which case node role assignment is skipped (nodes keep the default
+    role). Used to turn a node's `role` name into the numeric category_id
+    that POST/PATCH /nodes requires."""
+    st, b = api.get("/node_categories?limit=1000")
+    if st != 200:
+        return None
+    out = {}
+    for it in (b.get("items") or []):
+        if it.get("name") is not None:
+            out[it["name"]] = it.get("category_id")
+    return out
+
+
 def ensure_roles(api, roles, dry):
-    """Make sure every role name exists as a node_category; return a
-    name -> category_id map (used to resolve node `role` -> category_id)."""
+    """Create each role via /config/roles (the stable, file-backed roles
+    endpoint present on all PF versions; it syncs to the node_category DB
+    table on commit). Returns (tally, role_ids) where role_ids maps role
+    name -> category_id for node assignment — empty if this PF predates the
+    /node_categories route, in which case nodes keep the default role."""
     tally = Tally("roles")
-    by_name = {}
-    if not dry:
-        status, body = api.get("/node_categories")
-        if status == 200:
-            for it in (body.get("items") or []):
-                if it.get("name") is not None:
-                    by_name[it["name"]] = it.get("category_id")
-        else:
-            print(f"  WARN: could not list node_categories (HTTP {status}); "
-                  f"will attempt to create all roles")
+    if dry:
+        for role in roles:
+            print(f"    [dry-run] would create role {role['name']!r} via /config/roles")
+            tally.created += 1
+        return tally, {}
+
+    # What role sections already exist in the config?
+    existing = set()
+    st, b = api.get("/config/roles?limit=1000")
+    if st == 200:
+        for it in (b.get("items") or []):
+            if it.get("id") is not None:
+                existing.add(it["id"])
+    else:
+        print(f"  WARN: could not list /config/roles (HTTP {st}); will attempt to create all")
 
     for role in roles:
         name = role["name"]
-        if name in by_name:
+        if name in existing:
             tally.existed += 1
             continue
-        if dry:
-            print(f"    [dry-run] would create role {name!r}")
-            tally.created += 1
-            by_name[name] = None
-            continue
-        st, b = api.post("/node_categories", {"name": name, "notes": role.get("notes", "")})
+        st, b = api.post("/config/roles", {"id": name, "notes": role.get("notes", "")})
         if st in (200, 201):
-            # PF returns the new id on create; fall back to a re-list if not.
-            new_id = (b.get("id") or b.get("category_id")
-                      or (b.get("item") or {}).get("category_id"))
-            by_name[name] = new_id
             tally.created += 1
         elif st in EXISTS_STATUSES:
             tally.existed += 1
         else:
             tally.fail(name, st, msg_of(b))
 
-    # Resolve any ids we still don't have (created without an id echo).
-    if any(v is None for v in by_name.values()) and not dry:
-        st, b = api.get("/node_categories")
-        if st == 200:
-            for it in (b.get("items") or []):
-                by_name[it.get("name")] = it.get("category_id")
-    return tally, by_name
+    role_ids = category_id_map(api)
+    if role_ids is None:
+        print("  note: /node_categories not available on this PF — node role "
+              "assignment skipped (nodes keep the default role; roles still "
+              "created in Configuration > Roles)")
+        role_ids = {}
+    return tally, role_ids
 
 
 def seed_users(api, users, dry):
@@ -316,6 +331,33 @@ def seed_events(api, events, dry, available=None):
     return tally
 
 
+# ---------- Diagnostics -------------------------------------------------
+
+# Endpoints the seeder relies on. --probe GETs each and prints the status so
+# you can see at a glance what this PF build actually exposes (routes vary by
+# version — older boxes lack /node_categories, for instance).
+PROBE_PATHS = [
+    "/node_categories?limit=1",
+    "/config/roles?limit=1",
+    "/users?limit=1",
+    "/nodes?limit=1",
+    "/config/security_events?limit=1",
+    "/security_events?limit=1",
+]
+
+
+def probe(api):
+    print("Probing endpoints (GET):")
+    for path in PROBE_PATHS:
+        st, b = api.get(path)
+        note = ""
+        if st == 404:
+            note = "  <- not available on this PF version"
+        elif st not in (200, 201):
+            note = f"  <- {msg_of(b)}"
+        print(f"  {st}  GET {path}{note}")
+
+
 # ---------- Main --------------------------------------------------------
 
 def main(argv=None):
@@ -331,8 +373,16 @@ def main(argv=None):
                    help="PATCH existing users/nodes to match the dataset instead of skipping them.")
     p.add_argument("--skip-events", action="store_true", help="Don't apply security events.")
     p.add_argument("--dry-run", action="store_true", help="Print what would happen; make no changes.")
+    p.add_argument("--probe", action="store_true", help="Log in, report which API endpoints this box exposes, and exit.")
     p.add_argument("--timeout", type=int, default=15, help="Per-request timeout in seconds (default 15).")
     args = p.parse_args(argv)
+
+    if args.probe:
+        api = Api(args.server, args.api_port, args.insecure, args.timeout)
+        api.login(args.admin_user, args.admin_pass)
+        print(f"authenticated OK against {args.server}:{args.api_port}")
+        probe(api)
+        return 0
 
     try:
         with open(args.data, encoding="utf-8") as fh:
@@ -389,6 +439,15 @@ def main(argv=None):
     for t in tallies:
         for key, status, message in t.failures:
             print(f"  FAIL [{t.label}] {key}: HTTP {status} — {message}")
+
+    # security_event applies fail when the id isn't in the box's `class`
+    # table — i.e. the security event isn't configured/loaded there. Point
+    # at the fix rather than leaving a wall of 422s unexplained.
+    if any(t.label == "security_events" and t.failed for t in tallies):
+        print("\n  hint: security-event applies fail when the id isn't in the box's "
+              "`class` table.\n        Enable the events in Configuration > Security Events, "
+              "then reload config:\n        /usr/local/pf/bin/pfcmd configreload hard   "
+              "(and check: `--probe` shows /config/security_events)")
 
     if total_failed:
         print(f"\nDone with {total_failed} failure(s).")
