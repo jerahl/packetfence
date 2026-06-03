@@ -40,4 +40,46 @@ export const eventsApi = {
     const data = await api.get('security_events', { params: { mac, limit } })
     return (data?.items || []).map(normalize)
   },
+
+  // POST /api/v1/security_events/search — server-side filter / sort body.
+  // Same endpoint the v1 Threats page used.
+  async search(body) {
+    const data = await api.post('security_events/search', { body })
+    return { items: (data?.items || []).map(normalize), nextCursor: data?.nextCursor }
+  },
+
+  // KPI counters — each returns `{ count }` on the v1 endpoints.
+  async totals() {
+    const [open, closed, pending] = await Promise.all([
+      api.get('security_events/total_open').catch(() => ({ count: 0 })),
+      api.get('security_events/total_closed').catch(() => ({ count: 0 })),
+      api.get('security_events/total_pending').catch(() => ({ count: 0 })),
+    ])
+    return {
+      open: open?.count ?? open?.total ?? 0,
+      closed: closed?.count ?? closed?.total ?? 0,
+      pending: pending?.count ?? pending?.total ?? 0,
+    }
+  },
+
+  // Per-rule (security_event_id) counts, scoped to a status.
+  // Response shape: { items: [{ security_event_id, count }, ...] }
+  async perRule(status = 'open') {
+    const data = await api.get(`security_events/per_security_event_id_${status}`)
+    return data?.items || []
+  },
+
+  // Per-device-class counts: { items: [{ device_class, count }, ...] }
+  async perDeviceClass(status = 'open') {
+    const data = await api.get(`security_events/per_device_class_${status}`)
+    return data?.items || []
+  },
+
+  // Close an open event: PUT /api/v1/node/<mac>/close_security_event
+  // taking the security_event_id of the open record to release.
+  release(mac, id) {
+    return api.put(`node/${encodeURIComponent(mac)}/close_security_event`, {
+      body: { security_event_id: id },
+    })
+  },
 }

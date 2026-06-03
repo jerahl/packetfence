@@ -14,7 +14,7 @@ const routes = [
   // Status — Netdata-backed live charts
   { path: '/status/monitoring', name: 'status-monitoring', component: () => import('@/views/status/Monitoring.vue'), meta: { crumbs: ['Status', 'Monitoring'] } },
   { path: '/status/assets',     name: 'status-assets',     component: () => import('@/views/status/Assets.vue'),     meta: { crumbs: ['Status', 'Assets'] } },
-  { path: '/status/threats',    name: 'status-threats',    component: () => import('@/views/status/StatusStub.vue'), meta: { crumbs: ['Status', 'Threats'],  title: 'Threats',     source: 'security events + RADIUS auth failure metrics',          note: 'Live security-event volume and rule trends' } },
+  { path: '/status/threats',    name: 'status-threats',    component: () => import('@/views/status/Threats.vue'),    meta: { crumbs: ['Status', 'Threats'] } },
   { path: '/status/network',    name: 'status-network',    component: () => import('@/views/status/StatusStub.vue'), meta: { crumbs: ['Status', 'Network'],  title: 'Network',     source: 'Netdata system.net / ipv4 / ipv6 charts',                note: 'Live network-stack throughput and errors' } },
   { path: '/status/services',   name: 'status-services',   component: () => import('@/views/status/StatusStub.vue'), meta: { crumbs: ['Status', 'Services'], title: 'Services',    source: 'Netdata cgroup_<service>.* charts (dynamic discovery)',  note: 'Per-container CPU, memory and I/O' } },
   { path: '/status/queue',      name: 'status-queue',      component: () => import('@/views/status/StatusStub.vue'), meta: { crumbs: ['Status', 'Local Queue'], title: 'Local Queue', source: 'packetfence.redis.queue_stats_* + redis_redis-queue.* charts', note: 'pfqueue depth and Redis backing-store stats' } },
