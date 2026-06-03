@@ -1,0 +1,72 @@
+{
+  "_comment": "Curated dummy dataset for a PacketFence dev/test box. Loaded by pf-seed.py. Everything is fabricated test data (example.com emails, 555 phone numbers, synthetic MACs). Nodes reference users by `owner` (pid); security_events reference nodes by `mac`. Role names are ensured to exist as node_categories before nodes are created. security_event ids are default-shipped, enabled=Y events (see conf/security_events.conf.defaults).",
+
+  "roles": [
+    { "name": "Corp-Employee", "notes": "Seed: corporate managed endpoints" },
+    { "name": "Contractor",    "notes": "Seed: time-boxed contractor access" },
+    { "name": "BYOD",          "notes": "Seed: personal devices, onboarded" },
+    { "name": "VoIP",          "notes": "Seed: voice handsets" },
+    { "name": "IoT",           "notes": "Seed: headless / IoT devices" },
+    { "name": "Printers",      "notes": "Seed: networked printers" },
+    { "name": "Guest",         "notes": "Seed: captive-portal guests" }
+  ],
+
+  "users": [
+    { "pid": "khalil.osman",  "firstname": "Khalil",  "lastname": "Osman",     "email": "khalil.osman@example.com",  "telephone": "+1-555-0142", "company": "Operations",  "notes": "Seed user" },
+    { "pid": "mira.tomasek",  "firstname": "Mira",    "lastname": "Tomasek",   "email": "mira.tomasek@example.com",  "telephone": "+1-555-0188", "company": "Engineering", "notes": "Seed user" },
+    { "pid": "jordan.lee",    "firstname": "Jordan",  "lastname": "Lee",       "email": "jordan.lee@example.com",    "telephone": "+1-555-0119", "company": "Engineering", "notes": "Seed user" },
+    { "pid": "anika.devi",    "firstname": "Anika",   "lastname": "Devi",      "email": "anika.devi@example.com",    "telephone": "+1-555-0173", "company": "Finance",     "notes": "Seed user" },
+    { "pid": "soren.ng",      "firstname": "Soren",   "lastname": "Ng",        "email": "soren.ng@example.com",      "telephone": "+1-555-0150", "company": "Sales",       "notes": "Seed user" },
+    { "pid": "elena.cruz",    "firstname": "Elena",   "lastname": "Cruz",      "email": "elena.cruz@example.com",    "telephone": "+1-555-0164", "company": "Marketing",   "notes": "Seed user" },
+    { "pid": "raj.patel",     "firstname": "Raj",     "lastname": "Patel",     "email": "raj.patel@example.com",     "telephone": "+1-555-0102", "company": "IT",          "notes": "Seed user" },
+    { "pid": "yuki.tanaka",   "firstname": "Yuki",    "lastname": "Tanaka",    "email": "yuki.tanaka@example.com",   "telephone": "+1-555-0137", "company": "Engineering", "notes": "Seed user" },
+    { "pid": "lucia.rossi",   "firstname": "Lucia",   "lastname": "Rossi",     "email": "lucia.rossi@example.com",   "telephone": "+1-555-0195", "company": "HR",          "notes": "Seed user" },
+    { "pid": "ben.kowalski",  "firstname": "Ben",     "lastname": "Kowalski",  "email": "ben.kowalski@example.com",  "telephone": "+1-555-0128", "company": "Facilities",  "notes": "Seed user" },
+    { "pid": "fatou.diop",    "firstname": "Fatou",   "lastname": "Diop",      "email": "fatou.diop@example.com",    "telephone": "+1-555-0156", "company": "Sales",       "notes": "Seed user" },
+    { "pid": "noah.brand",    "firstname": "Noah",    "lastname": "Brand",     "email": "noah.brand@example.com",    "telephone": "+1-555-0181", "company": "Contractor",  "notes": "Seed user" }
+  ],
+
+  "nodes": [
+    { "mac": "F0:18:98:2A:10:01", "owner": "khalil.osman", "role": "Corp-Employee", "status": "reg",   "device_class": "Macintosh",            "device_type": "MacBook Pro",      "computername": "khalil-mbp" },
+    { "mac": "3C:5A:B4:11:42:7C", "owner": "khalil.osman", "role": "BYOD",          "status": "reg",   "device_class": "Apple iPhone",         "device_type": "iPhone",           "computername": "khalil-iphone" },
+    { "mac": "DC:A6:32:88:0E:14", "owner": "mira.tomasek", "role": "Corp-Employee", "status": "reg",   "device_class": "Windows",              "device_type": "Windows 11",       "computername": "mira-win11" },
+    { "mac": "B8:27:EB:5D:21:9A", "owner": "mira.tomasek", "role": "IoT",           "status": "reg",   "device_class": "Linux",                "device_type": "Raspberry Pi",     "computername": "mira-pi-lab" },
+    { "mac": "A4:83:E7:6F:33:02", "owner": "jordan.lee",   "role": "Corp-Employee", "status": "reg",   "device_class": "Macintosh",            "device_type": "MacBook Air",      "computername": "jordan-air" },
+    { "mac": "00:1A:11:4C:55:81", "owner": "jordan.lee",   "role": "Corp-Employee", "status": "reg",   "device_class": "Windows",              "device_type": "Windows 10",       "computername": "jordan-dev" },
+    { "mac": "70:85:C2:19:A4:30", "owner": "anika.devi",   "role": "Corp-Employee", "status": "reg",   "device_class": "Windows",              "device_type": "Windows 11",       "computername": "anika-fin" },
+    { "mac": "F4:F5:E8:73:18:6B", "owner": "anika.devi",   "role": "BYOD",          "status": "reg",   "device_class": "Android",              "device_type": "Galaxy S23",       "computername": "anika-android" },
+    { "mac": "00:E0:4C:62:9F:11", "owner": "soren.ng",     "role": "Corp-Employee", "status": "reg",   "device_class": "Windows",              "device_type": "Windows 10",       "computername": "soren-sales" },
+    { "mac": "5C:E0:C5:2D:77:48", "owner": "soren.ng",     "role": "BYOD",          "status": "pending","device_class": "Apple iPhone",        "device_type": "iPhone",           "computername": "soren-iphone" },
+    { "mac": "B8:78:2E:41:0C:93", "owner": "elena.cruz",   "role": "Corp-Employee", "status": "reg",   "device_class": "Macintosh",            "device_type": "iMac",             "computername": "elena-imac" },
+    { "mac": "E4:5F:01:88:22:1D", "owner": "elena.cruz",   "role": "Corp-Employee", "status": "reg",   "device_class": "Smart TV",             "device_type": "Conference Display","computername": "mktg-display" },
+    { "mac": "00:25:9C:5A:6E:F0", "owner": "raj.patel",    "role": "Corp-Employee", "status": "reg",   "device_class": "Linux",                "device_type": "Ubuntu Workstation","computername": "raj-linux" },
+    { "mac": "00:0C:29:3B:14:88", "owner": "raj.patel",    "role": "IoT",           "status": "reg",   "device_class": "Linux",                "device_type": "Virtual Machine",  "computername": "raj-vm-01" },
+    { "mac": "A4:83:E7:11:9C:54", "owner": "yuki.tanaka",  "role": "Corp-Employee", "status": "reg",   "device_class": "Macintosh",            "device_type": "MacBook Pro",      "computername": "yuki-mbp" },
+    { "mac": "DC:A6:32:1F:70:2A", "owner": "yuki.tanaka",  "role": "IoT",           "status": "reg",   "device_class": "Linux",                "device_type": "Raspberry Pi",     "computername": "yuki-pi" },
+    { "mac": "70:85:C2:88:31:0F", "owner": "lucia.rossi",  "role": "Corp-Employee", "status": "reg",   "device_class": "Windows",              "device_type": "Windows 11",       "computername": "lucia-hr" },
+    { "mac": "F0:18:98:64:2B:77", "owner": "lucia.rossi",  "role": "BYOD",          "status": "reg",   "device_class": "Apple iPad",           "device_type": "iPad",             "computername": "lucia-ipad" },
+    { "mac": "00:1A:11:90:5D:C2", "owner": "ben.kowalski", "role": "IoT",           "status": "reg",   "device_class": "IP Camera",            "device_type": "Axis Camera",      "computername": "cam-lobby" },
+    { "mac": "00:1A:11:90:5D:C3", "owner": "ben.kowalski", "role": "IoT",           "status": "reg",   "device_class": "IP Camera",            "device_type": "Axis Camera",      "computername": "cam-dock" },
+    { "mac": "00:25:9C:AA:13:60", "owner": "fatou.diop",   "role": "Corp-Employee", "status": "reg",   "device_class": "Windows",              "device_type": "Windows 10",       "computername": "fatou-sales" },
+    { "mac": "3C:5A:B4:7E:90:22", "owner": "fatou.diop",   "role": "BYOD",          "status": "reg",   "device_class": "Android",              "device_type": "Pixel 8",          "computername": "fatou-pixel" },
+    { "mac": "00:E0:4C:1A:3F:99", "owner": "noah.brand",   "role": "Contractor",    "status": "reg",   "device_class": "Windows",              "device_type": "Windows 10",       "computername": "noah-laptop" },
+    { "mac": "5C:E0:C5:6B:2A:14", "owner": "noah.brand",   "role": "Contractor",    "status": "unreg", "device_class": "Android",              "device_type": "Unknown Android",  "computername": "noah-tablet" },
+    { "mac": "B8:78:2E:90:51:07", "owner": "raj.patel",    "role": "VoIP",          "status": "reg",   "device_class": "VoIP Phone",           "device_type": "Cisco 8845",       "computername": "phone-it-01", "voip": "yes" },
+    { "mac": "B8:78:2E:90:51:08", "owner": "anika.devi",   "role": "VoIP",          "status": "reg",   "device_class": "VoIP Phone",           "device_type": "Cisco 8845",       "computername": "phone-fin-01", "voip": "yes" },
+    { "mac": "E4:5F:01:22:7D:33", "owner": "ben.kowalski", "role": "Printers",      "status": "reg",   "device_class": "Printer",              "device_type": "HP LaserJet",      "computername": "printer-3rd-fl" },
+    { "mac": "E4:5F:01:22:7D:34", "owner": "ben.kowalski", "role": "Printers",      "status": "reg",   "device_class": "Printer",              "device_type": "Brother MFC",      "computername": "printer-2nd-fl" },
+    { "mac": "F4:F5:E8:0A:6C:51", "owner": "soren.ng",     "role": "Guest",         "status": "unreg", "device_class": "Apple iPhone",         "device_type": "iPhone",           "computername": "guest-iphone-1" },
+    { "mac": "F4:F5:E8:0A:6C:52", "owner": "elena.cruz",   "role": "Guest",         "status": "unreg", "device_class": "Android",              "device_type": "Unknown Android",  "computername": "guest-android-1" }
+  ],
+
+  "security_events": [
+    { "mac": "5C:E0:C5:6B:2A:14", "security_event_id": "1300005", "_desc": "Lost or Stolen" },
+    { "mac": "00:1A:11:90:5D:C3", "security_event_id": "1100010", "_desc": "Rogue DHCP" },
+    { "mac": "B8:27:EB:5D:21:9A", "security_event_id": "1300006", "_desc": "Fingerbank device class change" },
+    { "mac": "3C:5A:B4:7E:90:22", "security_event_id": "1100013", "_desc": "Hostname change" },
+    { "mac": "00:0C:29:3B:14:88", "security_event_id": "1200003", "_desc": "Bandwidth Limit" },
+    { "mac": "F4:F5:E8:0A:6C:52", "security_event_id": "1300001", "_desc": "Spam" },
+    { "mac": "00:E0:4C:1A:3F:99", "security_event_id": "3000008", "_desc": "Maximum NTLM login attempt detected" },
+    { "mac": "DC:A6:32:1F:70:2A", "security_event_id": "1300000", "_desc": "Generic" }
+  ]
+}
