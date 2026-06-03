@@ -66,6 +66,11 @@ sub generateConfig {
     my $logger = get_logger();
     my %tags;
 
+    # Always define so the %%alerts%% placeholder substitutes to empty when no
+    # alerts are generated. Otherwise the literal '%%alerts%%' is left in the
+    # generated health.d/statsd.conf, which Netdata rejects as an invalid line.
+    $tags{'alerts'} = '';
+
     $tags{'hosts_cluster_members'} = '';
     if ($cluster_enabled) {
         my $int = $management_network->tag('int');
@@ -101,7 +106,6 @@ sub generateConfig {
 
             $tags{'alerts'} .= <<"EOT";
 template: eduroam1__source_available
-families: *
       on: statsd_gauge.source.$type.Eduroam1
    every: 10s
     crit: \$gauge != 1
@@ -111,7 +115,6 @@ families: *
       to: sysadmin
 
 template: eduroam2_source_available
-families: *
       on: statsd_gauge.source.$type.Eduroam2
    every: 10s
     crit: \$gauge != 1
@@ -125,7 +128,6 @@ EOT
             for my $source_id (@hosts) {
               $tags{'alerts'} .= <<"EOT";
 template: $source->{'id'}_source_available
-families: *
       on: statsd_gauge.source.$type.$source->{'id'}.$source_id
    every: 10s
     crit: \$gauge != 1
@@ -147,7 +149,6 @@ EOT
         my $cidr = $net_addr->cidr();
         $tags{'alerts'} .= <<"EOT";
 template: dhcp_missing_leases_$cidr
-families: *
       on: statsd_gauge.source.packetfence.dhcp_leases.percentused.$cidr
       os: linux
    hosts: *
@@ -177,6 +178,29 @@ EOT
     }
     $tags{'active_active_ip'} = pf::cluster::management_cluster_ip() || $management_network->tag('vip') || $management_network->tag('ip');
     $tags{'statsd_listen_port'} = $Config{'advanced'}{'statsd_listen_port'};
+
+    # Build go.d ping jobs, emitting only those with a non-empty host list.
+    # Netdata v2 rejects a job whose 'hosts' is empty ("config validation: 'hosts' can't be empty"),
+    # so jobs that would render with no targets (e.g. no cluster members or no monitored sources)
+    # must be omitted entirely rather than left with an empty list.
+    my %ping_targets = (
+        'packetfence-cluster' => $tags{'hosts_cluster_members'},
+        'packetfence-domains' => $tags{'hosts_domains'},
+        'packetfence-sources' => $tags{'hosts_sources'},
+    );
+    my $ping_jobs = '';
+    foreach my $job_name ( sort keys %ping_targets ) {
+        my @hosts = grep { length } split( /[\s,]+/, $ping_targets{$job_name} // '' );
+        next unless @hosts;
+        my $host_list = join( ', ', @hosts );
+        $ping_jobs .= <<"EOT";
+  - name: $job_name
+    autodetection_retry: 60
+    interval: 1s
+    hosts: [$host_list]
+EOT
+    }
+    $tags{'ping_jobs'} = $ping_jobs;
 
     parse_template( \%tags, "$conf_dir/monitoring/netdata.conf", "$generated_conf_dir/monitoring/netdata.conf" );
     parse_template( \%tags, "$conf_dir/monitoring/health.d/bcache.conf", "$generated_conf_dir/monitoring/health.d/bcache.conf" );

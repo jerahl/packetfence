@@ -46,9 +46,8 @@ const components = {
   BaseButtonService
 }
 
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from '@vue/composition-api'
+import { computed, onBeforeUnmount, onMounted, ref } from '@vue/composition-api'
 import acl from '@/utils/acl'
-import i18n from '@/utils/locale'
 import allSections from '../_config'
 
 const setup = (props, context) => {
@@ -87,23 +86,6 @@ const setup = (props, context) => {
     return sections.filter(section => ('items' in section && section.items.length) || ('groups' in section && section.groups.length))
   })
 
-  const initNetdata = () => {
-    if (window.NETDATA) {
-      // External JS library already loaded
-      nextTick(() => {
-        window.NETDATA.parseDom()
-      })
-    } else {
-      // Load external JS library
-      let el = document.createElement('SCRIPT')
-      window.netdataNoBootstrap = true
-      window.netdataTheme = 'default'
-      // window.netdataTheme = 'slate' #272b30
-      el.setAttribute('src', `//${window.location.hostname}:${window.location.port}/netdata/127.0.0.1/dashboard.js`)
-      document.head.appendChild(el)
-    }
-  }
-
   const pingNetdata = () => {
     const [firstChart] = $store.getters[`$_status/uniqueCharts`]
     if (firstChart) {
@@ -117,7 +99,6 @@ const setup = (props, context) => {
         if (service.alive) {
           setTimeout(() => {
             $store.dispatch(`$_status/allCharts`).then(() => {
-              initNetdata()
               pingNetdataTimer.value = setTimeout(pingNetdata, pingNetdataInterval.value)
             })
           }, 20000) // wait until netdata is ready
@@ -178,7 +159,6 @@ const setup = (props, context) => {
 
   onMounted(() => {
     if (!isSaas.value && $store.state['$_status'].allCharts) {
-      initNetdata()
       getAlarms()
     }
   })
@@ -188,12 +168,6 @@ const setup = (props, context) => {
       clearTimeout(pingNetdataTimer.value)
     if (getAlarmsTimer.value)
       clearTimeout(getAlarmsTimer.value)
-  })
-
-  watch([tabIndex, () => i18n.locale], () => {
-    nextTick(() => {
-      window.NETDATA.parseDom()
-    })
   })
 
   return {

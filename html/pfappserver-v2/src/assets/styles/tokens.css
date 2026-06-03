@@ -1,0 +1,83 @@
+/* Design tokens — ported from the prototype's styles.css.
+   Theme is toggled via [data-theme="light"] on <html>; density via
+   [data-density="tight|spacious"]. Accent hue is overridden imperatively
+   from the Tweaks store so all five accents share the same lightness curves. */
+
+:root {
+  --bg: oklch(0.18 0.012 250);
+  --bg-elev: oklch(0.21 0.012 250);
+  --bg-elev-2: oklch(0.24 0.012 250);
+  --bg-hover: oklch(0.26 0.012 250);
+  --bg-active: oklch(0.30 0.014 250);
+  --border: oklch(0.30 0.012 250);
+  --border-strong: oklch(0.38 0.014 250);
+  --text: oklch(0.97 0.005 250);
+  --text-mid: oklch(0.75 0.012 250);
+  --text-dim: oklch(0.58 0.012 250);
+  --text-faint: oklch(0.45 0.012 250);
+
+  --accent: oklch(0.72 0.16 250);
+  --accent-soft: oklch(0.72 0.16 250 / 0.14);
+  --accent-strong: oklch(0.78 0.18 250);
+  --accent-fg: oklch(0.99 0 0);
+
+  --success: oklch(0.74 0.16 150);
+  --success-soft: oklch(0.74 0.16 150 / 0.15);
+  --warn: oklch(0.80 0.15 78);
+  --warn-soft: oklch(0.80 0.15 78 / 0.16);
+  --danger: oklch(0.68 0.20 25);
+  --danger-soft: oklch(0.68 0.20 25 / 0.16);
+  --info: oklch(0.72 0.13 290);
+  --info-soft: oklch(0.72 0.13 290 / 0.16);
+
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --shadow-sm: 0 1px 0 oklch(0 0 0 / 0.2);
+  --shadow: 0 8px 24px oklch(0 0 0 / 0.35);
+  --shadow-lg: 0 24px 60px oklch(0 0 0 / 0.5);
+
+  --sidebar-w: 232px;
+  --sidebar-w-collapsed: 60px;
+  --topbar-h: 52px;
+  --inspector-w: 460px;
+
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --row-h: 38px;
+  --pad: 14px;
+  --pad-lg: 20px;
+}
+
+[data-theme="light"] {
+  --bg: oklch(0.985 0.003 250);
+  --bg-elev: oklch(1 0 0);
+  --bg-elev-2: oklch(0.97 0.005 250);
+  --bg-hover: oklch(0.95 0.008 250);
+  --bg-active: oklch(0.92 0.012 250);
+  --border: oklch(0.90 0.008 250);
+  --border-strong: oklch(0.82 0.012 250);
+  --text: oklch(0.22 0.012 250);
+  --text-mid: oklch(0.40 0.012 250);
+  --text-dim: oklch(0.55 0.012 250);
+  --text-faint: oklch(0.70 0.010 250);
+  --accent: oklch(0.55 0.18 250);
+  --accent-soft: oklch(0.55 0.18 250 / 0.10);
+  --accent-strong: oklch(0.48 0.20 250);
+  --accent-fg: oklch(0.99 0 0);
+  --success: oklch(0.55 0.16 150);
+  --success-soft: oklch(0.55 0.16 150 / 0.12);
+  --warn: oklch(0.65 0.17 70);
+  --warn-soft: oklch(0.65 0.17 70 / 0.14);
+  --danger: oklch(0.55 0.20 25);
+  --danger-soft: oklch(0.55 0.20 25 / 0.10);
+  --info: oklch(0.55 0.16 290);
+  --info-soft: oklch(0.55 0.16 290 / 0.10);
+  --shadow-sm: 0 1px 0 oklch(0 0 0 / 0.04);
+  --shadow: 0 6px 18px oklch(0 0 0 / 0.08);
+  --shadow-lg: 0 18px 40px oklch(0 0 0 / 0.12);
+}
+
+[data-density="tight"]    { --row-h: 32px; --pad: 10px; --pad-lg: 14px; }
+[data-density="spacious"] { --row-h: 46px; --pad: 18px; --pad-lg: 28px; }
