@@ -20,7 +20,8 @@ const routes = [
   { path: '/status/queue',      name: 'status-queue',      component: () => import('@/views/status/StatusStub.vue'), meta: { crumbs: ['Status', 'Local Queue'], title: 'Local Queue', source: 'packetfence.redis.queue_stats_* + redis_redis-queue.* charts', note: 'pfqueue depth and Redis backing-store stats' } },
 
   // System
-  { path: '/settings',   name: 'settings',   component: () => import('@/views/Settings.vue'),    meta: { crumbs: ['System', 'Settings'] } },
+  { path: '/configuration', name: 'configuration', component: () => import('@/views/Configuration.vue'), meta: { crumbs: ['System', 'Configuration'] } },
+  { path: '/settings',      name: 'settings',      component: () => import('@/views/Settings.vue'),      meta: { crumbs: ['System', 'Settings'] } },
 ]
 
 export default createRouter({

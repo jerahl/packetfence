@@ -29,7 +29,8 @@ const NAV = [
     { id: 'status-queue',      label: 'Local Queue', icon: 'list' },
   ]},
   { group: 'System', items: [
-    { id: 'settings', label: 'Settings', icon: 'settings' },
+    { id: 'configuration', label: 'Configuration', icon: 'settings' },
+    { id: 'settings',      label: 'Settings',      icon: 'inspect' },
   ]},
 ]
 </script>
