@@ -55,8 +55,11 @@ the source of truth on a re-run.
 - Python 3.7+ on the machine you run it from (doesn't have to be the PF box).
 - An **admin login** with write access to nodes/users — the same credentials
   you use for `/admin/`.
-- Network reach to the PF REST API port (default `1443`). On a dev box behind
-  an SSH tunnel, point `--server` at the tunnel endpoint.
+- Network reach to the PF REST API port. The default is **`9999`** — the
+  api-frontend that exposes the full UnifiedApi. The `1443` admin proxy only
+  forwards a subset of routes and returns `Unknown path /api/v1/node_categories`,
+  so use `9999` (or pass `--api-port`). On a dev box behind an SSH tunnel,
+  point `--server` at the tunnel endpoint.
 
 ## Usage
 
@@ -83,7 +86,7 @@ cd /usr/local/pf/addons/dev-seed
 | `--server`       | *(required)*     | PF host (FQDN or IP).                              |
 | `--admin-user`   | *(required)*     | Admin username.                                   |
 | `--admin-pass`   | *(required)*     | Admin password.                                   |
-| `--api-port`     | `1443`           | REST API port.                                    |
+| `--api-port`     | `9999`           | REST API port (full UnifiedApi; 1443 is a subset).|
 | `--data`         | `seed-data.json` | Dataset file to load.                             |
 | `--insecure`     | off              | Skip TLS verification (self-signed dev cert).     |
 | `--update`       | off              | PATCH existing users/nodes to match the dataset.  |
@@ -126,9 +129,12 @@ Edit `seed-data.json` — the shapes are:
 Keep it consistent: `owner` must match a user `pid`, `role` a defined role,
 and each event `mac` an existing node. Use `--dry-run` to check before loading.
 
-Security-event IDs must be **enabled** on the target box (see
-`conf/security_events.conf`). The defaults shipped here are all enabled in a
-stock install.
+Security-event IDs must exist in the target box's `class` table — i.e. be
+present in its `conf/security_events.conf` (the `security_event` row has a
+foreign key into `class`). To avoid guessing, the seeder **discovers** the
+box's configured event IDs from `GET /config/security_events` and, if a
+dataset entry's ID isn't configured there, transparently **remaps** it onto
+one that is (noted in the output) so the Threats page still gets populated.
 
 ## API surface used
 
@@ -137,6 +143,7 @@ All under `https://<server>:<api-port>/api/v1/`:
 | Step            | Call                                                  |
 |-----------------|-------------------------------------------------------|
 | Login           | `POST /login` → `{ token }` (JWT)                     |
+| Discover events | `GET  /config/security_events`                        |
 | List roles      | `GET  /node_categories`                               |
 | Create role     | `POST /node_categories`  `{ name, notes }`            |
 | Create user     | `POST /users`  `{ pid, firstname, ... }`              |

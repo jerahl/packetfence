@@ -262,15 +262,49 @@ def seed_nodes_update(api, nodes, role_ids):
     return tally
 
 
-def seed_events(api, events, dry):
+def discover_event_ids(api):
+    """Return the security_event ids actually configured on the box, as an
+    ordered list of strings. These are the only ids that satisfy the
+    security_event -> class foreign key, so an apply can succeed. Returns
+    None if the config endpoint isn't reachable (e.g. wrong port)."""
+    st, b = api.get("/config/security_events?limit=1000")
+    if st != 200:
+        return None
+    ids = []
+    for it in (b.get("items") or []):
+        sid = it.get("id", it.get("security_event_id"))
+        if sid is None:
+            continue
+        sid = str(sid)
+        if not sid.isdigit():        # skip "defaults" and any non-numeric stanza
+            continue
+        ids.append(sid)
+    return ids
+
+
+def seed_events(api, events, dry, available=None):
+    """Apply security events. `available` (from discover_event_ids) is the set
+    of ids the box can actually open; entries whose id isn't available are
+    remapped onto an available id so the Threats page still gets populated."""
     tally = Tally("security_events")
+    avail_list = sorted(set(available)) if available else None
+    rotate = 0
     for e in events:
         mac = e["mac"]
         sid = str(e["security_event_id"])
+        note = e.get("_desc", "")
+        if avail_list is not None and sid not in available:
+            if not avail_list:
+                tally.fail(f"{mac}:{sid}", 0, "no security events configured on this box")
+                continue
+            new_sid = avail_list[rotate % len(avail_list)]
+            rotate += 1
+            print(f"    note: {sid} ({note}) not configured here — using {new_sid} instead for {mac}")
+            sid = new_sid
         key = f"{mac}:{sid}"
         if dry:
             print(f"    [dry-run] would apply security_event {sid} "
-                  f"({e.get('_desc', '')}) to {mac}")
+                  f"({note}) to {mac}")
             tally.created += 1
             continue
         st, b = api.post(f"/node/{quote(mac, safe='')}/apply_security_event",
@@ -290,7 +324,7 @@ def main(argv=None):
     p.add_argument("--server", required=True, help="PF host (FQDN or IP).")
     p.add_argument("--admin-user", required=True, help="Admin username (write access to nodes/users).")
     p.add_argument("--admin-pass", required=True, help="Admin password.")
-    p.add_argument("--api-port", type=int, default=1443, help="REST API port (default 1443).")
+    p.add_argument("--api-port", type=int, default=9999, help="REST API port (default 9999, the api-frontend / full UnifiedApi). The 1443 admin proxy only exposes a subset and 404s on /node_categories.")
     p.add_argument("--data", default=DEFAULT_DATA, help=f"Dataset JSON (default {DEFAULT_DATA}).")
     p.add_argument("--insecure", action="store_true", help="Don't verify TLS (self-signed dev cert).")
     p.add_argument("--update", action="store_true",
@@ -337,7 +371,13 @@ def main(argv=None):
         tallies.append(seed_nodes(api, nodes, role_ids, args.dry_run))
 
     if events and not args.skip_events:
-        tallies.append(seed_events(api, events, args.dry_run))
+        available = None if args.dry_run else discover_event_ids(api)
+        if available is not None:
+            print(f"  discovered {len(available)} configured security event(s) on the box")
+        elif not args.dry_run:
+            print("  WARN: could not list /config/security_events — applying ids as-is "
+                  "(failures here usually mean the id isn't in this box's config)")
+        tallies.append(seed_events(api, events, args.dry_run, available))
     elif args.skip_events:
         print("  (skipping security events: --skip-events)")
 
