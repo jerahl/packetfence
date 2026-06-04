@@ -244,6 +244,50 @@ const MOCK_SERVICE_NAMES = [
   'pfstats', 'redis_cache', 'redis_queue', 'mariadb', 'netdata',
   'fingerbank-collector', 'iptables', 'keepalived',
 ]
+// Mock /api/v1/queues/stats response — { queue, stats: { count, outstanding,
+// expired } } — so Status > Local Queue renders offline with believable
+// pfqueue depth and per-task-type counters.
+export const MOCK_QUEUE_STATS = [
+  {
+    queue: 'general',
+    stats: {
+      count: 3,
+      outstanding: [
+        { name: 'pfqueue::stats::update', count: 1 },
+        { name: 'api::trigger_security_event', count: 2 },
+      ],
+      expired: [{ name: 'api::trigger_security_event', count: 4 }],
+    },
+  },
+  {
+    queue: 'priority',
+    stats: {
+      count: 0,
+      outstanding: [{ name: 'firewallsso::Update', count: 1 }],
+      expired: [],
+    },
+  },
+  {
+    queue: 'general_long_running',
+    stats: {
+      count: 12,
+      outstanding: [
+        { name: 'fingerbank::process_query', count: 9 },
+        { name: 'pfdns::refresh', count: 3 },
+      ],
+      expired: [{ name: 'fingerbank::process_query', count: 1 }],
+    },
+  },
+  {
+    queue: 'cluster',
+    stats: {
+      count: 1,
+      outstanding: [{ name: 'cluster::sync', count: 1 }],
+      expired: [],
+    },
+  },
+]
+
 export const MOCK_SERVICES = MOCK_SERVICE_NAMES.map((id, i) => {
   // keepalived only runs in a cluster; fingerbank-collector left disabled.
   const stopped = id === 'keepalived'
