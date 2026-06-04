@@ -17,7 +17,7 @@ const routes = [
   { path: '/status/threats',    name: 'status-threats',    component: () => import('@/views/status/Threats.vue'),    meta: { crumbs: ['Status', 'Threats'] } },
   { path: '/status/network',    name: 'status-network',    component: () => import('@/views/status/Network.vue'),    meta: { crumbs: ['Status', 'Network'] } },
   { path: '/status/communication', name: 'status-communication', component: () => import('@/views/status/NetworkCommunication.vue'), meta: { crumbs: ['Status', 'Network Communication'] } },
-  { path: '/status/services',   name: 'status-services',   component: () => import('@/views/status/StatusStub.vue'), meta: { crumbs: ['Status', 'Services'], title: 'Services',    source: 'Netdata cgroup_<service>.* charts (dynamic discovery)',  note: 'Per-container CPU, memory and I/O' } },
+  { path: '/status/services',   name: 'status-services',   component: () => import('@/views/status/Services.vue'),   meta: { crumbs: ['Status', 'Services'] } },
   { path: '/status/queue',      name: 'status-queue',      component: () => import('@/views/status/StatusStub.vue'), meta: { crumbs: ['Status', 'Local Queue'], title: 'Local Queue', source: 'packetfence.redis.queue_stats_* + redis_redis-queue.* charts', note: 'pfqueue depth and Redis backing-store stats' } },
 
   // System

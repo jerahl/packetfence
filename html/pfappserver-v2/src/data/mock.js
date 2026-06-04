@@ -232,6 +232,32 @@ function buildMockCommunication() {
 
 export const MOCK_COMMUNICATION = buildMockCommunication()
 
+// Mock /api/v1/services/status_all response — { id, alive, managed, enabled,
+// pid }. Covers the services a typical single-node PF install runs so Status >
+// Services renders offline. A couple are intentionally stopped/disabled so the
+// status filters and row actions have something to act on.
+const MOCK_SERVICE_NAMES = [
+  'packetfence-config', 'api-frontend', 'pfperl-api', 'httpd.admin_dispatcher',
+  'httpd.aaa', 'httpd.portal', 'httpd.webservices', 'haproxy-admin',
+  'haproxy-db', 'haproxy-portal', 'radiusd', 'pfacct', 'pfcron', 'pfdetect',
+  'pfdhcp', 'pfdhcplistener', 'pfdns', 'pffilter', 'pfqueue', 'pfsso',
+  'pfstats', 'redis_cache', 'redis_queue', 'mariadb', 'netdata',
+  'fingerbank-collector', 'iptables', 'keepalived',
+]
+export const MOCK_SERVICES = MOCK_SERVICE_NAMES.map((id, i) => {
+  // keepalived only runs in a cluster; fingerbank-collector left disabled.
+  const stopped = id === 'keepalived'
+  const disabled = id === 'fingerbank-collector'
+  const alive = !stopped && !disabled
+  return {
+    id,
+    alive,
+    managed: !disabled,
+    enabled: !disabled,
+    pid: alive ? 1000 + i * 37 : 0,
+  }
+})
+
 export function deviceIcon(type) {
   switch (type) {
     case 'Laptop': return 'laptop'
