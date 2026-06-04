@@ -194,6 +194,114 @@ const networkGraph = buildMockGraph()
 
 export const NAC_DATA = { nodes, events, switches, trend, audits, profiles, networkGraph, users: USERS, roles: ROLES }
 
+// Mock fingerbank_communications response — same shape the real
+// /api/v1/nodes/fingerbank_communications endpoint returns:
+//   { <devicehex>: { all_hosts_cache: { <host>: { "<PROTO:PORT>": count } } } }
+// Built deterministically from a sample of the mock nodes so Status >
+// Network Communication renders coherent device->host->protocol flows
+// offline. Hosts/protocols are picked per device-type so e.g. Apple devices
+// talk to Apple hosts, IoT to MQTT, etc.
+const COMM_HOSTS = {
+  Laptop:        [['settings-win.data.microsoft.com', 'TCP:443'], ['ctldl.windowsupdate.com', 'TCP:80'], ['8.8.8.8', 'UDP:53'], ['dc01.corp.example.com', 'TCP:445'], ['time.windows.com', 'UDP:123']],
+  Desktop:       [['settings-win.data.microsoft.com', 'TCP:443'], ['dc01.corp.example.com', 'TCP:389'], ['10.10.3.171', 'TCP:443'], ['8.8.8.8', 'UDP:53']],
+  Phone:         [['gateway.icloud.com', 'TCP:443'], ['fcm.googleapis.com', 'TCP:5228'], ['1.1.1.1', 'UDP:53'], ['graph.facebook.com', 'TCP:443']],
+  Tablet:        [['gateway.icloud.com', 'TCP:443'], ['play.googleapis.com', 'TCP:443'], ['1.1.1.1', 'UDP:53']],
+  IoT:           [['mqtt.broker.example.com', 'TCP:8883'], ['pool.ntp.org', 'UDP:123'], ['192.168.1.1', 'UDP:67'], ['firmware.iot-vendor.net', 'TCP:443']],
+  VoIP:          [['sip.corp.example.com', 'UDP:5060'], ['10.10.3.171', 'UDP:5060'], ['pool.ntp.org', 'UDP:123'], ['provisioning.polycom.com', 'TCP:443']],
+  TV:            [['cdn.samsungcloud.tv', 'TCP:443'], ['app.netflix.com', 'TCP:443'], ['8.8.8.8', 'UDP:53']],
+  VM:            [['archive.ubuntu.com', 'TCP:80'], ['github.com', 'TCP:443'], ['10.10.3.171', 'TCP:443'], ['8.8.8.8', 'UDP:53'], ['registry.docker.io', 'TCP:443']],
+  'Access Point':[['10.10.3.171', 'TCP:443'], ['dashboard.meraki.com', 'TCP:443'], ['pool.ntp.org', 'UDP:123']],
+}
+function buildMockCommunication() {
+  const out = {}
+  // a spread of node types, capped so the charts stay legible
+  const sample = nodes.filter((_, i) => i % 4 === 0).slice(0, 14)
+  sample.forEach((n, idx) => {
+    const pairs = COMM_HOSTS[n.type] || COMM_HOSTS.Laptop
+    const hex = n.mac.replace(/[^0-9A-Fa-f]/g, '').toLowerCase()
+    const cache = {}
+    pairs.forEach(([host, proto], j) => {
+      cache[host] = cache[host] || {}
+      // deterministic-ish counts, weighted toward the first (primary) hosts
+      cache[host][proto] = 20 + ((idx * 7 + j * 13) % 180) + (j === 0 ? 120 : 0)
+    })
+    out[hex] = { all_hosts_cache: cache }
+  })
+  return out
+}
+
+export const MOCK_COMMUNICATION = buildMockCommunication()
+
+// Mock /api/v1/services/status_all response — { id, alive, managed, enabled,
+// pid }. Covers the services a typical single-node PF install runs so Status >
+// Services renders offline. A couple are intentionally stopped/disabled so the
+// status filters and row actions have something to act on.
+const MOCK_SERVICE_NAMES = [
+  'packetfence-config', 'api-frontend', 'pfperl-api', 'httpd.admin_dispatcher',
+  'httpd.aaa', 'httpd.portal', 'httpd.webservices', 'haproxy-admin',
+  'haproxy-db', 'haproxy-portal', 'radiusd', 'pfacct', 'pfcron', 'pfdetect',
+  'pfdhcp', 'pfdhcplistener', 'pfdns', 'pffilter', 'pfqueue', 'pfsso',
+  'pfstats', 'redis_cache', 'redis_queue', 'mariadb', 'netdata',
+  'fingerbank-collector', 'iptables', 'keepalived',
+]
+// Mock /api/v1/queues/stats response — { queue, stats: { count, outstanding,
+// expired } } — so Status > Local Queue renders offline with believable
+// pfqueue depth and per-task-type counters.
+export const MOCK_QUEUE_STATS = [
+  {
+    queue: 'general',
+    stats: {
+      count: 3,
+      outstanding: [
+        { name: 'pfqueue::stats::update', count: 1 },
+        { name: 'api::trigger_security_event', count: 2 },
+      ],
+      expired: [{ name: 'api::trigger_security_event', count: 4 }],
+    },
+  },
+  {
+    queue: 'priority',
+    stats: {
+      count: 0,
+      outstanding: [{ name: 'firewallsso::Update', count: 1 }],
+      expired: [],
+    },
+  },
+  {
+    queue: 'general_long_running',
+    stats: {
+      count: 12,
+      outstanding: [
+        { name: 'fingerbank::process_query', count: 9 },
+        { name: 'pfdns::refresh', count: 3 },
+      ],
+      expired: [{ name: 'fingerbank::process_query', count: 1 }],
+    },
+  },
+  {
+    queue: 'cluster',
+    stats: {
+      count: 1,
+      outstanding: [{ name: 'cluster::sync', count: 1 }],
+      expired: [],
+    },
+  },
+]
+
+export const MOCK_SERVICES = MOCK_SERVICE_NAMES.map((id, i) => {
+  // keepalived only runs in a cluster; fingerbank-collector left disabled.
+  const stopped = id === 'keepalived'
+  const disabled = id === 'fingerbank-collector'
+  const alive = !stopped && !disabled
+  return {
+    id,
+    alive,
+    managed: !disabled,
+    enabled: !disabled,
+    pid: alive ? 1000 + i * 37 : 0,
+  }
+})
+
 export function deviceIcon(type) {
   switch (type) {
     case 'Laptop': return 'laptop'

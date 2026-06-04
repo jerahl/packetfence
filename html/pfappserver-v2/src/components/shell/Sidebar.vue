@@ -25,6 +25,7 @@ const NAV = [
     { id: 'status-assets',     label: 'Assets',      icon: 'inspect' },
     { id: 'status-threats',    label: 'Threats',     icon: 'alert' },
     { id: 'status-network',    label: 'Network',     icon: 'network' },
+    { id: 'status-communication', label: 'Communication', icon: 'globe' },
     { id: 'status-services',   label: 'Services',    icon: 'switch' },
     { id: 'status-queue',      label: 'Local Queue', icon: 'list' },
   ]},

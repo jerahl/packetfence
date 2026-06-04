@@ -417,3 +417,10 @@ export const CFG_FORMS = {
 // generic list/form template. The Configuration shell looks these up
 // by id and `<component :is="...">` the resolved component.
 export const CFG_CUSTOM_IDS = new Set(['cluster', 'services', 'maintenance', 'ssl', 'adminaccess', 'database'])
+
+// The "Policies and Access Control" group now lives under Govern > Policies
+// rather than System > Configuration. Split the tree so each page renders its
+// own slice through the shared ConfigWorkspace.
+export const POLICIES_GROUP = 'Policies and Access Control'
+export const POLICY_TREE = CFG_TREE.filter(g => g.group === POLICIES_GROUP)
+export const SYSTEM_TREE = CFG_TREE.filter(g => g.group !== POLICIES_GROUP)

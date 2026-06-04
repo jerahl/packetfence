@@ -1,0 +1,460 @@
+#!/usr/bin/env python3
+"""
+PacketFence dev-data seeder.
+
+Loads a curated, coherent dummy dataset (roles, users, endpoints and a
+handful of open security events) into a PacketFence dev/test box through
+the REST API, so the admin UI — including the v2 app at /admin/v2/ — has
+realistic-looking data to render.
+
+This is NOT a load tester. For throughput / RADIUS load see the sibling
+addons/loadtest/pf-loadtest.py. This script makes one pass over a static
+JSON dataset, in dependency order:
+
+    roles (node_categories)  ->  users  ->  nodes  ->  security_events
+
+It is idempotent: records that already exist are reported as "exists" and
+skipped, or updated in place with --update. Safe to re-run.
+
+API surface used (all under https://<server>:<api-port>/api/v1/):
+    POST /login                                   -> { token }   (JWT)
+    GET  /node_categories                         -> { items: [{ category_id, name }] }
+    POST /node_categories            { name, notes }
+    POST /users                      { pid, firstname, ... }
+    POST /nodes                      { mac, pid, category_id, status, ... }
+    POST /node/<mac>/apply_security_event   { security_event_id }
+
+Example
+-------
+    ./pf-seed.py --server pfdev --admin-user admin --admin-pass admin --insecure
+    ./pf-seed.py --server 10.10.3.171 --admin-user admin --admin-pass admin \\
+        --insecure --update
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import ssl
+import sys
+import urllib.error
+import urllib.request
+from urllib.parse import quote
+
+
+DEFAULT_DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "seed-data.json")
+
+# HTTP statuses PF returns when a record's unique key already exists. We
+# treat these as "already there" rather than a failure so re-runs are clean.
+EXISTS_STATUSES = (409, 422)
+
+
+class Api:
+    """Tiny JSON-over-HTTPS client for the PF REST API. Carries the bearer
+    token and knows how to talk to a self-signed dev box (--insecure)."""
+
+    def __init__(self, server, port, insecure, timeout):
+        self.base = f"https://{server}:{port}/api/v1"
+        self.ctx = ssl._create_unverified_context() if insecure else None
+        self.timeout = timeout
+        self.token = None
+
+    def _request(self, method, path, body=None, auth=True):
+        url = self.base + path
+        headers = {"Accept": "application/json"}
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+        if auth and self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        data = json.dumps(body).encode("utf-8") if body is not None else None
+        req = urllib.request.Request(url, data=data, method=method, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout, context=self.ctx) as r:
+                raw = r.read().decode("utf-8") or "{}"
+                return r.status, json.loads(raw)
+        except urllib.error.HTTPError as e:
+            raw = e.read().decode("utf-8", "replace")
+            try:
+                payload = json.loads(raw)
+            except ValueError:
+                payload = {"message": raw.strip()[:200]}
+            return e.code, payload
+        except urllib.error.URLError as e:
+            raise SystemExit(f"FATAL: cannot reach {url}: {e.reason}")
+
+    def login(self, username, password):
+        status, body = self._request(
+            "POST", "/login", {"username": username, "password": password}, auth=False
+        )
+        if status != 200 or not body.get("token"):
+            raise SystemExit(
+                f"FATAL: login failed (HTTP {status}): "
+                f"{body.get('message') or body}"
+            )
+        self.token = body["token"]
+
+    def get(self, path):
+        return self._request("GET", path)
+
+    def post(self, path, body):
+        return self._request("POST", path, body)
+
+    def patch(self, path, body):
+        return self._request("PATCH", path, body)
+
+
+class Tally:
+    """Per-resource outcome counter + human summary."""
+
+    def __init__(self, label):
+        self.label = label
+        self.created = 0
+        self.existed = 0
+        self.updated = 0
+        self.failed = 0
+        self.failures = []  # (key, status, message)
+
+    def fail(self, key, status, message):
+        self.failed += 1
+        self.failures.append((key, status, message))
+
+    def line(self):
+        return (f"  {self.label:<16} created={self.created:<4} "
+                f"exists={self.existed:<4} updated={self.updated:<4} "
+                f"failed={self.failed}")
+
+
+def msg_of(body):
+    if isinstance(body, dict):
+        return body.get("message") or body.get("error") or json.dumps(body)[:160]
+    return str(body)[:160]
+
+
+# ---------- Seeding steps ----------------------------------------------
+
+def category_id_map(api):
+    """name -> category_id, read from /node_categories. That route only
+    exists on newer PF; returns {} (with no error) on versions without it,
+    in which case node role assignment is skipped (nodes keep the default
+    role). Used to turn a node's `role` name into the numeric category_id
+    that POST/PATCH /nodes requires."""
+    st, b = api.get("/node_categories?limit=1000")
+    if st != 200:
+        return None
+    out = {}
+    for it in (b.get("items") or []):
+        if it.get("name") is not None:
+            out[it["name"]] = it.get("category_id")
+    return out
+
+
+def ensure_roles(api, roles, dry):
+    """Create each role via /config/roles (the stable, file-backed roles
+    endpoint present on all PF versions; it syncs to the node_category DB
+    table on commit). Returns (tally, role_ids) where role_ids maps role
+    name -> category_id for node assignment — empty if this PF predates the
+    /node_categories route, in which case nodes keep the default role."""
+    tally = Tally("roles")
+    if dry:
+        for role in roles:
+            print(f"    [dry-run] would create role {role['name']!r} via /config/roles")
+            tally.created += 1
+        return tally, {}
+
+    # What role sections already exist in the config?
+    existing = set()
+    st, b = api.get("/config/roles?limit=1000")
+    if st == 200:
+        for it in (b.get("items") or []):
+            if it.get("id") is not None:
+                existing.add(it["id"])
+    else:
+        print(f"  WARN: could not list /config/roles (HTTP {st}); will attempt to create all")
+
+    for role in roles:
+        name = role["name"]
+        if name in existing:
+            tally.existed += 1
+            continue
+        st, b = api.post("/config/roles", {"id": name, "notes": role.get("notes", "")})
+        if st in (200, 201):
+            tally.created += 1
+        elif st in EXISTS_STATUSES:
+            tally.existed += 1
+        else:
+            tally.fail(name, st, msg_of(b))
+
+    role_ids = category_id_map(api)
+    if role_ids is None:
+        print("  note: /node_categories not available on this PF — node role "
+              "assignment skipped (nodes keep the default role; roles still "
+              "created in Configuration > Roles)")
+        role_ids = {}
+    return tally, role_ids
+
+
+def seed_users(api, users, dry):
+    tally = Tally("users")
+    for u in users:
+        pid = u["pid"]
+        body = {k: v for k, v in u.items() if not k.startswith("_")}
+        if dry:
+            print(f"    [dry-run] would create user {pid}")
+            tally.created += 1
+            continue
+        st, b = api.post("/users", body)
+        if st in (200, 201):
+            tally.created += 1
+        elif st in EXISTS_STATUSES:
+            tally.existed += 1
+        else:
+            tally.fail(pid, st, msg_of(b))
+    return tally
+
+
+def seed_users_update(api, users):
+    tally = Tally("users")
+    for u in users:
+        pid = u["pid"]
+        body = {k: v for k, v in u.items() if k not in ("pid",) and not k.startswith("_")}
+        st, b = api.patch(f"/user/{quote(pid, safe='')}", body)
+        if st in (200, 201):
+            tally.updated += 1
+        else:
+            tally.fail(pid, st, msg_of(b))
+    return tally
+
+
+def node_body(n, role_ids):
+    body = {
+        "mac": n["mac"],
+        "pid": n.get("owner", "default"),
+        "status": n.get("status", "unreg"),
+    }
+    for key in ("computername", "device_class", "device_type", "notes", "voip"):
+        if key in n:
+            body[key] = n[key]
+    role = n.get("role")
+    if role is not None:
+        cid = role_ids.get(role)
+        if cid is not None:
+            body["category_id"] = cid
+    return body
+
+
+def seed_nodes(api, nodes, role_ids, dry):
+    tally = Tally("nodes")
+    for n in nodes:
+        mac = n["mac"]
+        body = node_body(n, role_ids)
+        if dry:
+            print(f"    [dry-run] would create node {mac} "
+                  f"(role={n.get('role')}, status={body['status']})")
+            tally.created += 1
+            continue
+        st, b = api.post("/nodes", body)
+        if st in (200, 201):
+            tally.created += 1
+        elif st in EXISTS_STATUSES:
+            tally.existed += 1
+        else:
+            tally.fail(mac, st, msg_of(b))
+    return tally
+
+
+def seed_nodes_update(api, nodes, role_ids):
+    tally = Tally("nodes")
+    for n in nodes:
+        mac = n["mac"]
+        body = node_body(n, role_ids)
+        body.pop("mac", None)  # mac is the url key, not a patch field
+        st, b = api.patch(f"/node/{quote(mac, safe='')}", body)
+        if st in (200, 201):
+            tally.updated += 1
+        else:
+            tally.fail(mac, st, msg_of(b))
+    return tally
+
+
+def discover_event_ids(api):
+    """Return the security_event ids actually configured on the box, as an
+    ordered list of strings. These are the only ids that satisfy the
+    security_event -> class foreign key, so an apply can succeed. Returns
+    None if the config endpoint isn't reachable (e.g. wrong port)."""
+    st, b = api.get("/config/security_events?limit=1000")
+    if st != 200:
+        return None
+    ids = []
+    for it in (b.get("items") or []):
+        sid = it.get("id", it.get("security_event_id"))
+        if sid is None:
+            continue
+        sid = str(sid)
+        if not sid.isdigit():        # skip "defaults" and any non-numeric stanza
+            continue
+        ids.append(sid)
+    return ids
+
+
+def seed_events(api, events, dry, available=None):
+    """Apply security events. `available` (from discover_event_ids) is the set
+    of ids the box can actually open; entries whose id isn't available are
+    remapped onto an available id so the Threats page still gets populated."""
+    tally = Tally("security_events")
+    avail_list = sorted(set(available)) if available else None
+    rotate = 0
+    for e in events:
+        mac = e["mac"]
+        sid = str(e["security_event_id"])
+        note = e.get("_desc", "")
+        if avail_list is not None and sid not in available:
+            if not avail_list:
+                tally.fail(f"{mac}:{sid}", 0, "no security events configured on this box")
+                continue
+            new_sid = avail_list[rotate % len(avail_list)]
+            rotate += 1
+            print(f"    note: {sid} ({note}) not configured here — using {new_sid} instead for {mac}")
+            sid = new_sid
+        key = f"{mac}:{sid}"
+        if dry:
+            print(f"    [dry-run] would apply security_event {sid} "
+                  f"({note}) to {mac}")
+            tally.created += 1
+            continue
+        st, b = api.post(f"/node/{quote(mac, safe='')}/apply_security_event",
+                         {"security_event_id": sid})
+        if st in (200, 201):
+            tally.created += 1
+        else:
+            tally.fail(key, st, msg_of(b))
+    return tally
+
+
+# ---------- Diagnostics -------------------------------------------------
+
+# Endpoints the seeder relies on. --probe GETs each and prints the status so
+# you can see at a glance what this PF build actually exposes (routes vary by
+# version — older boxes lack /node_categories, for instance).
+PROBE_PATHS = [
+    "/node_categories?limit=1",
+    "/config/roles?limit=1",
+    "/users?limit=1",
+    "/nodes?limit=1",
+    "/config/security_events?limit=1",
+    "/security_events?limit=1",
+]
+
+
+def probe(api):
+    print("Probing endpoints (GET):")
+    for path in PROBE_PATHS:
+        st, b = api.get(path)
+        note = ""
+        if st == 404:
+            note = "  <- not available on this PF version"
+        elif st not in (200, 201):
+            note = f"  <- {msg_of(b)}"
+        print(f"  {st}  GET {path}{note}")
+
+
+# ---------- Main --------------------------------------------------------
+
+def main(argv=None):
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--server", required=True, help="PF host (FQDN or IP).")
+    p.add_argument("--admin-user", required=True, help="Admin username (write access to nodes/users).")
+    p.add_argument("--admin-pass", required=True, help="Admin password.")
+    p.add_argument("--api-port", type=int, default=9999, help="REST API port (default 9999, the api-frontend / full UnifiedApi). The 1443 admin proxy only exposes a subset and 404s on /node_categories.")
+    p.add_argument("--data", default=DEFAULT_DATA, help=f"Dataset JSON (default {DEFAULT_DATA}).")
+    p.add_argument("--insecure", action="store_true", help="Don't verify TLS (self-signed dev cert).")
+    p.add_argument("--update", action="store_true",
+                   help="PATCH existing users/nodes to match the dataset instead of skipping them.")
+    p.add_argument("--skip-events", action="store_true", help="Don't apply security events.")
+    p.add_argument("--dry-run", action="store_true", help="Print what would happen; make no changes.")
+    p.add_argument("--probe", action="store_true", help="Log in, report which API endpoints this box exposes, and exit.")
+    p.add_argument("--timeout", type=int, default=15, help="Per-request timeout in seconds (default 15).")
+    args = p.parse_args(argv)
+
+    if args.probe:
+        api = Api(args.server, args.api_port, args.insecure, args.timeout)
+        api.login(args.admin_user, args.admin_pass)
+        print(f"authenticated OK against {args.server}:{args.api_port}")
+        probe(api)
+        return 0
+
+    try:
+        with open(args.data, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError) as e:
+        raise SystemExit(f"FATAL: cannot read dataset {args.data}: {e}")
+
+    roles = data.get("roles", [])
+    users = data.get("users", [])
+    nodes = data.get("nodes", [])
+    events = data.get("security_events", [])
+
+    print(f"Seeding {args.server}:{args.api_port} from {os.path.basename(args.data)}")
+    print(f"  dataset: {len(roles)} roles, {len(users)} users, "
+          f"{len(nodes)} nodes, {len(events)} security events"
+          f"{'   [DRY RUN]' if args.dry_run else ''}")
+
+    api = Api(args.server, args.api_port, args.insecure, args.timeout)
+    if not args.dry_run:
+        api.login(args.admin_user, args.admin_pass)
+        print("  authenticated OK")
+
+    tallies = []
+    role_tally, role_ids = ensure_roles(api, roles, args.dry_run)
+    tallies.append(role_tally)
+
+    if args.update and not args.dry_run:
+        # Create-or-update: try create first (counts new ones), then PATCH the
+        # rest so the dataset is the source of truth on a re-run.
+        tallies.append(seed_users(api, users, dry=False))
+        tallies.append(seed_users_update(api, users))
+        tallies.append(seed_nodes(api, nodes, role_ids, dry=False))
+        tallies.append(seed_nodes_update(api, nodes, role_ids))
+    else:
+        tallies.append(seed_users(api, users, args.dry_run))
+        tallies.append(seed_nodes(api, nodes, role_ids, args.dry_run))
+
+    if events and not args.skip_events:
+        available = None if args.dry_run else discover_event_ids(api)
+        if available is not None:
+            print(f"  discovered {len(available)} configured security event(s) on the box")
+        elif not args.dry_run:
+            print("  WARN: could not list /config/security_events — applying ids as-is "
+                  "(failures here usually mean the id isn't in this box's config)")
+        tallies.append(seed_events(api, events, args.dry_run, available))
+    elif args.skip_events:
+        print("  (skipping security events: --skip-events)")
+
+    print("\n=== Summary ===")
+    total_failed = 0
+    for t in tallies:
+        print(t.line())
+        total_failed += t.failed
+    for t in tallies:
+        for key, status, message in t.failures:
+            print(f"  FAIL [{t.label}] {key}: HTTP {status} — {message}")
+
+    # security_event applies fail when the id isn't in the box's `class`
+    # table — i.e. the security event isn't configured/loaded there. Point
+    # at the fix rather than leaving a wall of 422s unexplained.
+    if any(t.label == "security_events" and t.failed for t in tallies):
+        print("\n  hint: security-event applies fail when the id isn't in the box's "
+              "`class` table.\n        Enable the events in Configuration > Security Events, "
+              "then reload config:\n        /usr/local/pf/bin/pfcmd configreload hard   "
+              "(and check: `--probe` shows /config/security_events)")
+
+    if total_failed:
+        print(f"\nDone with {total_failed} failure(s).")
+        return 1
+    print("\nDone. All records seeded.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
