@@ -194,6 +194,44 @@ const networkGraph = buildMockGraph()
 
 export const NAC_DATA = { nodes, events, switches, trend, audits, profiles, networkGraph, users: USERS, roles: ROLES }
 
+// Mock fingerbank_communications response — same shape the real
+// /api/v1/nodes/fingerbank_communications endpoint returns:
+//   { <devicehex>: { all_hosts_cache: { <host>: { "<PROTO:PORT>": count } } } }
+// Built deterministically from a sample of the mock nodes so Status >
+// Network Communication renders coherent device->host->protocol flows
+// offline. Hosts/protocols are picked per device-type so e.g. Apple devices
+// talk to Apple hosts, IoT to MQTT, etc.
+const COMM_HOSTS = {
+  Laptop:        [['settings-win.data.microsoft.com', 'TCP:443'], ['ctldl.windowsupdate.com', 'TCP:80'], ['8.8.8.8', 'UDP:53'], ['dc01.corp.example.com', 'TCP:445'], ['time.windows.com', 'UDP:123']],
+  Desktop:       [['settings-win.data.microsoft.com', 'TCP:443'], ['dc01.corp.example.com', 'TCP:389'], ['10.10.3.171', 'TCP:443'], ['8.8.8.8', 'UDP:53']],
+  Phone:         [['gateway.icloud.com', 'TCP:443'], ['fcm.googleapis.com', 'TCP:5228'], ['1.1.1.1', 'UDP:53'], ['graph.facebook.com', 'TCP:443']],
+  Tablet:        [['gateway.icloud.com', 'TCP:443'], ['play.googleapis.com', 'TCP:443'], ['1.1.1.1', 'UDP:53']],
+  IoT:           [['mqtt.broker.example.com', 'TCP:8883'], ['pool.ntp.org', 'UDP:123'], ['192.168.1.1', 'UDP:67'], ['firmware.iot-vendor.net', 'TCP:443']],
+  VoIP:          [['sip.corp.example.com', 'UDP:5060'], ['10.10.3.171', 'UDP:5060'], ['pool.ntp.org', 'UDP:123'], ['provisioning.polycom.com', 'TCP:443']],
+  TV:            [['cdn.samsungcloud.tv', 'TCP:443'], ['app.netflix.com', 'TCP:443'], ['8.8.8.8', 'UDP:53']],
+  VM:            [['archive.ubuntu.com', 'TCP:80'], ['github.com', 'TCP:443'], ['10.10.3.171', 'TCP:443'], ['8.8.8.8', 'UDP:53'], ['registry.docker.io', 'TCP:443']],
+  'Access Point':[['10.10.3.171', 'TCP:443'], ['dashboard.meraki.com', 'TCP:443'], ['pool.ntp.org', 'UDP:123']],
+}
+function buildMockCommunication() {
+  const out = {}
+  // a spread of node types, capped so the charts stay legible
+  const sample = nodes.filter((_, i) => i % 4 === 0).slice(0, 14)
+  sample.forEach((n, idx) => {
+    const pairs = COMM_HOSTS[n.type] || COMM_HOSTS.Laptop
+    const hex = n.mac.replace(/[^0-9A-Fa-f]/g, '').toLowerCase()
+    const cache = {}
+    pairs.forEach(([host, proto], j) => {
+      cache[host] = cache[host] || {}
+      // deterministic-ish counts, weighted toward the first (primary) hosts
+      cache[host][proto] = 20 + ((idx * 7 + j * 13) % 180) + (j === 0 ? 120 : 0)
+    })
+    out[hex] = { all_hosts_cache: cache }
+  })
+  return out
+}
+
+export const MOCK_COMMUNICATION = buildMockCommunication()
+
 export function deviceIcon(type) {
   switch (type) {
     case 'Laptop': return 'laptop'
